@@ -1,0 +1,6 @@
+{
+  "name": "Đường Lên Đỉnh Olympia",
+  "description": "Đấu trường trí tuệ Đường lên đỉnh Olympia tối đa 4 người chơi cùng 1 Admin quản trò. Tự động tạo câu hỏi đa dạng các vòng bằng Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
