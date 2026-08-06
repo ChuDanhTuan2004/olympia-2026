@@ -1,37 +1,283 @@
 @import "tailwindcss";
 
-/* Monochrome theme: former teal/emerald accents now use neutral tones. */
+/* Navy-and-gold Olympia theme inspired by the supplied mobile reference. */
 @theme {
-  --color-teal-50: #fafafa;
-  --color-teal-100: #f5f5f5;
-  --color-teal-200: #e5e5e5;
-  --color-teal-300: #d4d4d4;
-  --color-teal-400: #a3a3a3;
-  --color-teal-500: #737373;
-  --color-teal-600: #171717;
-  --color-teal-700: #262626;
-  --color-teal-800: #171717;
-  --color-teal-900: #0a0a0a;
-  --color-teal-950: #0a0a0a;
+  --color-teal-50: #0c2857;
+  --color-teal-100: #113368;
+  --color-teal-200: #214a82;
+  --color-teal-300: #3566a4;
+  --color-teal-400: #3d79c5;
+  --color-teal-500: #2e72ca;
+  --color-teal-600: #f1c44e;
+  --color-teal-700: #dca82c;
+  --color-teal-800: #ffd86b;
+  --color-teal-900: #fff0b4;
+  --color-teal-950: #081833;
 
-  --color-emerald-50: #fafafa;
-  --color-emerald-100: #f5f5f5;
-  --color-emerald-200: #e5e5e5;
-  --color-emerald-300: #d4d4d4;
-  --color-emerald-400: #a3a3a3;
-  --color-emerald-500: #737373;
-  --color-emerald-600: #171717;
-  --color-emerald-700: #262626;
-  --color-emerald-800: #171717;
-  --color-emerald-900: #0a0a0a;
-  --color-emerald-950: #0a0a0a;
+  --color-emerald-50: #eafaf2;
+  --color-emerald-100: #d0f4e1;
+  --color-emerald-200: #9ce8c2;
+  --color-emerald-300: #62d59c;
+  --color-emerald-400: #35bc7b;
+  --color-emerald-500: #1d9b61;
+  --color-emerald-600: #168352;
+  --color-emerald-700: #146843;
+  --color-emerald-800: #135337;
+  --color-emerald-900: #10452f;
+  --color-emerald-950: #08271b;
 }
 
 @layer base {
   body {
-    background-color: #fafafa;
-    color: #09090b;
+    min-width: 320px;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(54, 111, 194, 0.28), transparent 34rem),
+      radial-gradient(circle at 92% 100%, rgba(241, 196, 78, 0.12), transparent 28rem),
+      #06132b;
+    color: #f8fbff;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+.olympia-app,
+.olympia-login {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    linear-gradient(145deg, rgba(14, 45, 91, 0.88), rgba(4, 15, 36, 0.96) 55%),
+    #06132b !important;
+}
+
+.olympia-app::before,
+.olympia-login::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(125deg, transparent 0 72%, rgba(255, 255, 255, 0.035) 72% 73%, transparent 73%),
+    linear-gradient(35deg, transparent 0 82%, rgba(241, 196, 78, 0.05) 82% 83%, transparent 83%);
+  background-size: 210px 210px, 280px 280px;
+}
+
+.olympia-login-card,
+.olympia-lobby > div > div,
+.olympia-app main > div,
+.olympia-victory-card {
+  border-color: rgba(73, 126, 203, 0.48) !important;
+  background: linear-gradient(180deg, rgba(13, 37, 78, 0.97), rgba(7, 24, 54, 0.98)) !important;
+  box-shadow: 0 24px 70px rgba(0, 4, 18, 0.42), inset 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+.olympia-login-card,
+.olympia-victory-card {
+  border-radius: 24px !important;
+}
+
+.olympia-app main [class*="bg-white"],
+.olympia-app main [class*="bg-stone-"],
+.olympia-lobby [class*="bg-white"],
+.olympia-lobby [class*="bg-stone-"] {
+  border-color: rgba(73, 126, 203, 0.42) !important;
+  background-color: rgba(12, 37, 78, 0.86) !important;
+}
+
+.olympia-app main [class*="text-slate-8"],
+.olympia-app main [class*="text-slate-7"],
+.olympia-app main [class*="text-neutral-8"],
+.olympia-lobby [class*="text-slate-8"],
+.olympia-lobby [class*="text-slate-7"] {
+  color: #f8fbff !important;
+}
+
+.olympia-app main [class*="text-slate-6"],
+.olympia-app main [class*="text-slate-5"],
+.olympia-app main [class*="text-neutral-5"],
+.olympia-lobby [class*="text-slate-6"],
+.olympia-lobby [class*="text-slate-5"] {
+  color: #afc5e7 !important;
+}
+
+.olympia-app main input,
+.olympia-app main select,
+.olympia-lobby input,
+.olympia-login input {
+  border-color: rgba(76, 130, 207, 0.58) !important;
+  background: rgba(5, 23, 55, 0.88) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.olympia-app main input::placeholder,
+.olympia-lobby input::placeholder,
+.olympia-login input::placeholder {
+  color: #718bb4;
+}
+
+.olympia-app [class*="bg-teal-600"],
+.olympia-lobby [class*="bg-teal-600"],
+.olympia-login .olympia-primary-button {
+  border: 1px solid #ffe28b !important;
+  background: linear-gradient(180deg, #f8da73, #dfa72b) !important;
+  color: #071735 !important;
+  box-shadow: 0 8px 22px rgba(221, 164, 36, 0.24), inset 0 1px rgba(255, 255, 255, 0.55) !important;
+}
+
+.olympia-app [class*="bg-black"],
+.olympia-app [class*="bg-neutral-9"] {
+  border-color: rgba(60, 117, 198, 0.56) !important;
+  background-color: #061631 !important;
+}
+
+.olympia-app h1,
+.olympia-app h2,
+.olympia-app h3,
+.olympia-login h1,
+.olympia-victory-card h2 {
+  letter-spacing: 0.025em;
+}
+
+.olympia-brand-title,
+.olympia-round-kicker {
+  color: #f5cd61 !important;
+  text-shadow: 0 2px 12px rgba(241, 196, 78, 0.18);
+}
+
+.olympia-hero-emblem {
+  position: relative;
+  display: grid;
+  width: 138px;
+  height: 112px;
+  margin: 0 auto 1.5rem;
+  place-items: center;
+  border: 1px solid rgba(77, 132, 211, 0.38);
+  border-radius: 28px;
+  color: #f5cd61;
+  background:
+    radial-gradient(circle at 50% 60%, rgba(50, 117, 221, 0.38), transparent 52%),
+    linear-gradient(150deg, rgba(19, 57, 115, 0.72), rgba(8, 27, 61, 0.48));
+  box-shadow: inset 0 0 28px rgba(43, 104, 196, 0.18);
+}
+
+.olympia-hero-emblem::after {
+  position: absolute;
+  inset: 14px;
+  border: 1px dashed rgba(245, 205, 97, 0.34);
+  border-radius: 20px;
+  content: "";
+}
+
+.olympia-header {
+  border-color: rgba(70, 123, 199, 0.5) !important;
+  background: rgba(5, 19, 45, 0.94) !important;
+  box-shadow: 0 10px 30px rgba(0, 4, 18, 0.28) !important;
+}
+
+.olympia-top-control {
+  border-color: rgba(241, 196, 78, 0.5) !important;
+  background: #0d2a58 !important;
+  color: #f5cd61 !important;
+}
+
+.olympia-victory {
+  background: rgba(2, 10, 27, 0.8) !important;
+}
+
+.olympia-modal {
+  border-color: rgba(73, 126, 203, 0.5) !important;
+  background: linear-gradient(180deg, #0d2a58, #071a3b) !important;
+  box-shadow: 0 28px 80px rgba(0, 4, 18, 0.58) !important;
+}
+
+.olympia-light-modal {
+  border-color: rgba(73, 126, 203, 0.5) !important;
+  background: linear-gradient(180deg, #102f60, #081c40) !important;
+  color: #f8fbff !important;
+}
+
+.olympia-light-modal [class*="bg-neutral-"],
+.olympia-light-modal [class*="bg-white"] {
+  border-color: rgba(73, 126, 203, 0.42) !important;
+  background: rgba(5, 23, 55, 0.78) !important;
+}
+
+.olympia-light-modal [class*="text-neutral-"],
+.olympia-light-modal [class*="text-black"] {
+  color: #c3d4ee !important;
+}
+
+.olympia-light-modal input {
+  border-color: rgba(76, 130, 207, 0.58) !important;
+  background: #061735 !important;
+  color: #fff !important;
+}
+
+.olympia-host-panel,
+.olympia-result-card {
+  border-color: rgba(73, 126, 203, 0.55) !important;
+  background: linear-gradient(180deg, rgba(15, 46, 94, 0.98), rgba(6, 24, 55, 0.99)) !important;
+  color: #f8fbff !important;
+  box-shadow: 0 24px 70px rgba(0, 4, 18, 0.55) !important;
+}
+
+.olympia-host-panel [class*="bg-stone-"],
+.olympia-host-panel [class*="bg-white"] {
+  border-color: rgba(73, 126, 203, 0.42) !important;
+  background: rgba(5, 23, 55, 0.8) !important;
+}
+
+.olympia-host-panel [class*="text-slate-"],
+.olympia-result-card [class*="text-neutral-"] {
+  color: #c3d4ee !important;
+}
+
+.olympia-victory-card [class*="bg-stone-"],
+.olympia-victory-card [class*="bg-white"] {
+  border-color: rgba(71, 126, 204, 0.42) !important;
+  background: rgba(6, 25, 59, 0.85) !important;
+  color: #f8fbff !important;
+}
+
+.olympia-victory-card [class*="text-slate-"],
+.olympia-victory-card [class*="text-teal-9"] {
+  color: #f8fbff !important;
+}
+
+@media (max-width: 640px) {
+  .olympia-app main {
+    padding: 14px 12px 88px;
+  }
+
+  .olympia-app main > div {
+    gap: 12px;
+  }
+
+  .olympia-lobby {
+    padding-inline: 0 !important;
+  }
+
+  .olympia-lobby > div > div {
+    border-radius: 20px !important;
+    padding: 18px !important;
   }
 }

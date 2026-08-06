@@ -48,7 +48,7 @@ export const Lobby: React.FC<LobbyProps> = ({
 
   if (!room) {
     return (
-      <div className="min-h-[85vh] flex items-center justify-center px-4 py-8">
+      <div className="olympia-lobby min-h-[85vh] flex items-center justify-center px-4 py-8">
         <div className="max-w-xl w-full bg-white/80 border border-stone-200/80 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-stone-200/60 backdrop-blur-md">
           <div className="mb-6 flex items-center justify-between border-b border-stone-200 pb-4 text-slate-700">
             <div className="flex items-center gap-2 text-xs font-bold">
@@ -72,7 +72,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-700 font-bold text-2xl shadow-sm mb-4">
               <Award className="w-9 h-9 stroke-[1.75]" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">
+            <h2 className="olympia-brand-title text-2xl sm:text-3xl font-extrabold tracking-tight">
               ĐƯỜNG LÊN ĐỈNH OLYMPIA
             </h2>
           </div>
@@ -207,7 +207,7 @@ export const Lobby: React.FC<LobbyProps> = ({
 
   // Room waiting state screen
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="olympia-lobby max-w-4xl mx-auto px-4 py-8">
       <div className="bg-white/80 border border-stone-200/80 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-stone-200/60 backdrop-blur-md">
         <div className="mb-5 flex items-center justify-end gap-2 text-slate-700">
           <span className="mr-auto text-xs font-bold">Đăng nhập: {accountUsername}</span>
@@ -223,7 +223,7 @@ export const Lobby: React.FC<LobbyProps> = ({
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-stone-200/80 pb-6 mb-6">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-teal-700">PHÒNG CHỜ THI ĐẤU</span>
+            <span className="olympia-round-kicker text-xs font-bold uppercase tracking-wider">PHÒNG CHỜ THI ĐẤU</span>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-800 mt-1">SẴN SÀNG TRẬN THI ĐẤU</h2>
           </div>
           <div className="bg-stone-100/80 border border-stone-200/80 rounded-2xl px-5 py-2.5 text-center shadow-sm">

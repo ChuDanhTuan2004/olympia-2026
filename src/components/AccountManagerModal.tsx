@@ -34,7 +34,7 @@ export const AccountManagerModal: React.FC<AccountManagerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-neutral-200 bg-white p-6 text-black shadow-2xl sm:p-8">
+      <div className="olympia-light-modal max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border p-6 shadow-2xl sm:p-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase text-neutral-500">

@@ -32,7 +32,7 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40">
+    <div className="olympia-host-controls fixed bottom-4 right-4 z-40">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
@@ -41,7 +41,7 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
           <ShieldAlert className="w-5 h-5 stroke-[1.75]" /> BẢNG CHỦ PHÒNG
         </button>
       ) : (
-        <div className="w-80 sm:w-96 bg-white/90 border border-stone-200/80 rounded-3xl p-5 shadow-2xl shadow-stone-300/80 backdrop-blur-xl text-slate-800 space-y-4 max-h-[85vh] overflow-y-auto">
+        <div className="olympia-host-panel w-80 sm:w-96 border rounded-3xl p-5 shadow-2xl backdrop-blur-xl text-slate-100 space-y-4 max-h-[85vh] overflow-y-auto">
           <div className="flex items-center justify-between border-b border-stone-200/80 pb-3">
             <div className="flex items-center gap-2 font-bold text-teal-800 text-sm">
               <ShieldAlert className="w-4 h-4 text-teal-600 stroke-[1.75]" /> ĐIỀU KHIỂN CHỦ PHÒNG

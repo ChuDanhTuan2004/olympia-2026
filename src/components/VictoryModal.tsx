@@ -21,8 +21,8 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({ room, isHost, onRese
   if (!winner) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fadeIn">
-      <div className="max-w-2xl w-full bg-white/95 border border-stone-200/80 rounded-3xl p-6 sm:p-10 text-center shadow-2xl shadow-stone-300/80 relative overflow-hidden">
+    <div className="olympia-victory fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn">
+      <div className="olympia-victory-card max-w-2xl w-full border rounded-3xl p-6 sm:p-10 text-center shadow-2xl relative overflow-hidden">
         {/* Soft Teal Glowing Accent */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -40,7 +40,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({ room, isHost, onRese
           <Sparkles className="w-4 h-4 text-teal-600 stroke-[1.75]" /> NHÀ VÔ ĐỊCH OLYMPIA <Sparkles className="w-4 h-4 text-teal-600 stroke-[1.75]" />
         </div>
 
-        <h2 className="text-3xl sm:text-4xl font-black text-slate-800 mb-2">
+        <h2 className="olympia-brand-title text-3xl sm:text-4xl font-black mb-2">
           {winner.name.toUpperCase()}
         </h2>
 

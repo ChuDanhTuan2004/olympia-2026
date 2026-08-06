@@ -36,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({ room, isHost, playerId, isConnec
   };
 
   return (
-    <header className="bg-neutral-950/90 border-b border-neutral-800 backdrop-blur-xl sticky top-0 z-40 px-4 py-3 text-white shadow-lg">
+    <header className="olympia-header border-b backdrop-blur-xl sticky top-0 z-40 px-4 py-3 text-white shadow-lg">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Logo */}
         <div className="flex items-center gap-3">
@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({ room, isHost, playerId, isConnec
             <Award className="w-5 h-5 text-white stroke-[1.75]" />
           </div>
           <div>
-            <h1 className="font-extrabold text-lg md:text-xl tracking-tight text-white">
+            <h1 className="olympia-brand-title font-extrabold text-lg md:text-xl tracking-tight">
               ĐƯỜNG LÊN ĐỈNH OLYMPIA
             </h1>
             <div className="flex items-center gap-2 text-xs text-neutral-400">

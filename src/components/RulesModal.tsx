@@ -14,7 +14,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
       <div
-        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl overflow-hidden transition-all text-neutral-100"
+        className="olympia-modal relative w-full max-w-2xl max-h-[90vh] flex flex-col border rounded-3xl shadow-2xl overflow-hidden transition-all text-neutral-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

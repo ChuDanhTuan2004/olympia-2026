@@ -14,7 +14,7 @@ export const TopNavControls: React.FC<TopNavControlsProps> = ({
       <button
         onClick={onOpenRules}
         title="Xem Luật Chơi"
-        className="group relative flex items-center justify-center w-10 h-10 rounded-2xl bg-black text-white border border-neutral-800 shadow-lg shadow-black/20 hover:bg-neutral-900 transition-all active:scale-95"
+        className="olympia-top-control group relative flex items-center justify-center w-10 h-10 rounded-2xl border shadow-lg shadow-black/20 transition-all active:scale-95"
       >
         <BookOpen className="w-5 h-5 stroke-[1.75] group-hover:scale-110 transition-transform duration-300" />
         <span className="sr-only">Luật Chơi</span>
@@ -22,4 +22,3 @@ export const TopNavControls: React.FC<TopNavControlsProps> = ({
     </div>
   );
 };
-

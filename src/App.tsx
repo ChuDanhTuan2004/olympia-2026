@@ -371,7 +371,7 @@ export default function App() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-[#09090b] text-white flex items-center justify-center">
+      <div className="olympia-login text-white flex items-center justify-center">
         <div className="text-sm font-bold animate-pulse">ĐANG KHÔI PHỤC PHIÊN ĐĂNG NHẬP...</div>
       </div>
     );
@@ -382,7 +382,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-neutral-100 font-sans selection:bg-white selection:text-black pb-20 relative">
+    <div className="olympia-app min-h-screen text-neutral-100 font-sans selection:bg-amber-300 selection:text-slate-950 pb-20 relative">
       {/* Persistent Top Right Button (Rules Icon - accessible on all pages) */}
       <TopNavControls
         onOpenRules={() => setShowRulesModal(true)}
@@ -412,7 +412,7 @@ export default function App() {
 
       {role === 'player' && answerResult && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-neutral-200 bg-white p-8 text-center text-black shadow-2xl animate-fadeIn">
+          <div className="olympia-result-card w-full max-w-sm rounded-3xl border p-8 text-center shadow-2xl animate-fadeIn">
             {answerResult.isCorrect ? (
               <CheckCircle2 className="mx-auto mb-4 h-16 w-16 stroke-[1.5]" />
             ) : (
