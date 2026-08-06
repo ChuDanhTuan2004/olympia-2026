@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { GameState, Role, WSMessage } from './types';
+import { AccountSummary, AuthUser, GameState, Role, WSMessage } from './types';
 import { Header } from './components/Header';
 import { Lobby } from './components/Lobby';
 import { RoundWarmUp } from './components/RoundWarmUp';
@@ -11,8 +11,11 @@ import { AdminControlDrawer } from './components/AdminControlDrawer';
 import { TopNavControls } from './components/TopNavControls';
 import { RulesModal } from './components/RulesModal';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { LoginScreen } from './components/LoginScreen';
+import { AccountManagerModal } from './components/AccountManagerModal';
 
 const SESSION_STORAGE_KEY = 'olympia_active_session';
+const AUTH_TOKEN_STORAGE_KEY = 'olympia_auth_token';
 
 interface StoredSession {
   roomId: string;
@@ -27,11 +30,20 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number } | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<AccountSummary[]>([]);
+  const [showAccountManager, setShowAccountManager] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
 
   // Rules Modal State
   const [showRulesModal, setShowRulesModal] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const authTokenRef = useRef<string | null>(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY));
+  const authUserRef = useRef<AuthUser | null>(null);
   const shownAnswerResultTimestamp = useRef<number>();
 
   const playerAnswerResult = room?.players.find((player) => player.id === playerId)?.lastAnswerResult;
@@ -75,32 +87,76 @@ export default function App() {
       setIsConnected(true);
       console.log('WebSocket Connected');
 
-      const storedSessionRaw = localStorage.getItem(SESSION_STORAGE_KEY);
-      const savedPlayerId = localStorage.getItem('olympia_player_id');
-      if (storedSessionRaw) {
-        try {
-          const storedSession = JSON.parse(storedSessionRaw) as StoredSession;
-          if (storedSession.roomId && (storedSession.role === 'admin' || storedSession.role === 'player')) {
-            setRole(storedSession.role);
-            socket.send(
-              JSON.stringify({
-                type: 'REJOIN_ROOM',
-                roomId: storedSession.roomId,
-                role: storedSession.role,
-                playerId: savedPlayerId || undefined,
-              })
-            );
-          }
-        } catch {
-          localStorage.removeItem(SESSION_STORAGE_KEY);
-        }
+      const savedAuthToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+      authTokenRef.current = savedAuthToken;
+      if (savedAuthToken) {
+        socket.send(JSON.stringify({ type: 'AUTH_RESTORE', authToken: savedAuthToken }));
+      } else {
+        setAuthChecking(false);
       }
     };
 
     socket.onmessage = (event) => {
       try {
         const msg: WSMessage = JSON.parse(event.data);
-        if (msg.type === 'INIT_STATE' || msg.type === 'STATE_UPDATE') {
+        if (msg.type === 'AUTH_SUCCESS') {
+          const { token, user, playerId: authenticatedPlayerId } = msg.payload as {
+            token: string;
+            user: AuthUser;
+            playerId?: string;
+          };
+          authTokenRef.current = token;
+          authUserRef.current = user;
+          localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+          setAuthUser(user);
+          setRole(user.role);
+          setAuthChecking(false);
+          setAuthSubmitting(false);
+          setAuthError(null);
+
+          if (authenticatedPlayerId) {
+            localStorage.setItem('olympia_player_id', authenticatedPlayerId);
+            setPlayerId(authenticatedPlayerId);
+          }
+
+          const storedSessionRaw = localStorage.getItem(SESSION_STORAGE_KEY);
+          if (storedSessionRaw) {
+            try {
+              const storedSession = JSON.parse(storedSessionRaw) as StoredSession;
+              if (storedSession.roomId && storedSession.role === user.role) {
+                socket.send(JSON.stringify({
+                  type: 'REJOIN_ROOM',
+                  roomId: storedSession.roomId,
+                  role: storedSession.role,
+                  playerId: authenticatedPlayerId || localStorage.getItem('olympia_player_id') || undefined,
+                  authToken: token,
+                }));
+              } else {
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+              }
+            } catch {
+              localStorage.removeItem(SESSION_STORAGE_KEY);
+            }
+          }
+        } else if (msg.type === 'AUTH_ERROR') {
+          const message = String(msg.payload || 'Không thể xác thực.');
+          setAuthError(message);
+          setAccountMessage(message);
+          setAuthChecking(false);
+          setAuthSubmitting(false);
+
+          if (message.includes('Phiên đăng nhập') || message.includes('cần đăng nhập')) {
+            authTokenRef.current = null;
+            authUserRef.current = null;
+            localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+            setAuthUser(null);
+            setRoom(null);
+          }
+        } else if (msg.type === 'ACCOUNT_LIST') {
+          setAccounts(msg.payload as AccountSummary[]);
+        } else if (msg.type === 'ACCOUNT_CREATED') {
+          setAccountMessage(`Đã tạo tài khoản ${msg.payload?.username}.`);
+        } else if (msg.type === 'INIT_STATE' || msg.type === 'STATE_UPDATE') {
           const nextRoom = msg.payload as GameState;
           if (msg.type === 'INIT_STATE') {
             const savedPlayerId = localStorage.getItem('olympia_player_id');
@@ -113,7 +169,7 @@ export default function App() {
         } else if (msg.type === 'ROOM_CANCELLED') {
           localStorage.removeItem(SESSION_STORAGE_KEY);
           setRoom(null);
-          setRole('spectator');
+          setRole(authUserRef.current?.role || 'spectator');
           setAnswerResult(null);
           setIsGenerating(false);
         } else if (msg.type === 'ERROR') {
@@ -151,9 +207,55 @@ export default function App() {
         roomId: room.roomId,
         role,
         playerId,
+        authToken: authTokenRef.current || undefined,
         payload,
       })
     );
+  };
+
+  const sendAuthenticatedMessage = (type: string, payload?: any) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !authTokenRef.current) return;
+    wsRef.current.send(JSON.stringify({ type, authToken: authTokenRef.current, payload }));
+  };
+
+  const handleLogin = (username: string, password: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setAuthError('Chưa kết nối được với máy chủ. Vui lòng thử lại.');
+      return;
+    }
+    setAuthSubmitting(true);
+    setAuthError(null);
+    wsRef.current.send(JSON.stringify({ type: 'AUTH_LOGIN', payload: { username, password } }));
+  };
+
+  const handleLogout = () => {
+    sendAuthenticatedMessage('AUTH_LOGOUT');
+    authTokenRef.current = null;
+    authUserRef.current = null;
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setAuthUser(null);
+    setRoom(null);
+    setRole('spectator');
+    setAccounts([]);
+    setShowAccountManager(false);
+    setAuthError(null);
+  };
+
+  const handleOpenAccountManager = () => {
+    setAccountMessage(null);
+    setShowAccountManager(true);
+    sendAuthenticatedMessage('LIST_ACCOUNTS');
+  };
+
+  const handleCreateAccount = (username: string, password: string) => {
+    setAccountMessage(null);
+    sendAuthenticatedMessage('CREATE_ACCOUNT', { username, password });
+  };
+
+  const handleDeleteAccount = (username: string) => {
+    setAccountMessage(null);
+    sendAuthenticatedMessage('DELETE_ACCOUNT', { username });
   };
 
   // Join or Create Room handler
@@ -172,6 +274,7 @@ export default function App() {
             type: 'CREATE_ROOM',
             roomId,
             role: 'admin',
+            authToken: authTokenRef.current || undefined,
             payload: { code: roomCode },
           })
         );
@@ -182,6 +285,7 @@ export default function App() {
             roomId,
             role: 'player',
             playerId,
+            authToken: authTokenRef.current || undefined,
             payload: { name, avatar },
           })
         );
@@ -256,6 +360,18 @@ export default function App() {
     sendMessage('CANCEL_ROOM');
   };
 
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-white flex items-center justify-center">
+        <div className="text-sm font-bold animate-pulse">ĐANG KHÔI PHỤC PHIÊN ĐĂNG NHẬP...</div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return <LoginScreen onLogin={handleLogin} error={authError} isSubmitting={authSubmitting} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#09090b] text-neutral-100 font-sans selection:bg-white selection:text-black pb-20 relative">
       {/* Persistent Top Right Button (Rules Icon - accessible on all pages) */}
@@ -267,6 +383,15 @@ export default function App() {
       <RulesModal
         isOpen={showRulesModal}
         onClose={() => setShowRulesModal(false)}
+      />
+
+      <AccountManagerModal
+        accounts={accounts}
+        isOpen={authUser.role === 'admin' && showAccountManager}
+        onClose={() => setShowAccountManager(false)}
+        onCreate={handleCreateAccount}
+        onDelete={handleDeleteAccount}
+        message={accountMessage}
       />
 
       {/* Toast Notification Alert */}
@@ -305,6 +430,10 @@ export default function App() {
           onGenerateQuestions={handleGenerateQuestions}
           onStartGame={handleStartGame}
           isGenerating={isGenerating}
+          accountRole={authUser.role}
+          accountUsername={authUser.username}
+          onOpenAccountManager={handleOpenAccountManager}
+          onLogout={handleLogout}
         />
       ) : (
         <>
@@ -381,6 +510,7 @@ export default function App() {
               onUpdateScore={handleUpdateScore}
               onResetGame={handleResetGame}
               onCancelRoom={handleCancelRoom}
+              onOpenAccountManager={handleOpenAccountManager}
             />
           )}
         </>

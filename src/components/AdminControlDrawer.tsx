@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState } from '../types';
-import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw, Trash2 } from 'lucide-react';
+import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw, Trash2, UserCog } from 'lucide-react';
 
 interface AdminControlDrawerProps {
   room: GameState;
@@ -10,6 +10,7 @@ interface AdminControlDrawerProps {
   onUpdateScore: (playerId: string, newScore: number) => void;
   onResetGame: () => void;
   onCancelRoom: () => void;
+  onOpenAccountManager: () => void;
 }
 
 export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
@@ -20,6 +21,7 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
   onUpdateScore,
   onResetGame,
   onCancelRoom,
+  onOpenAccountManager,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(room.players[0]?.id || '');
@@ -163,6 +165,13 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
               ))}
             </div>
           </div>
+
+          <button
+            onClick={onOpenAccountManager}
+            className="w-full py-2.5 bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-slate-700 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+          >
+            <UserCog className="w-3.5 h-3.5 stroke-[1.75]" /> QUẢN LÝ TÀI KHOẢN
+          </button>
 
           <button
             onClick={onResetGame}

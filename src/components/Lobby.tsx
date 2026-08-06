@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Award, Shield, UserCheck, Sparkles, Play, RefreshCw, Layers } from 'lucide-react';
-import { GameState, Role } from '../types';
+import { ArrowLeft, Award, Shield, UserCheck, Sparkles, Play, RefreshCw, Layers, LogOut, UserCog } from 'lucide-react';
+import { AccountRole, GameState, Role } from '../types';
 
 interface LobbyProps {
   room?: GameState;
@@ -9,6 +9,10 @@ interface LobbyProps {
   onGenerateQuestions: (topic?: string) => void;
   onStartGame: () => void;
   isGenerating: boolean;
+  accountRole: AccountRole;
+  accountUsername: string;
+  onOpenAccountManager: () => void;
+  onLogout: () => void;
 }
 
 const AVATARS = ['🦁', '🦅', '🐉', '⚡', '🚀', '🎓', '🏆', '🔥'];
@@ -20,9 +24,13 @@ export const Lobby: React.FC<LobbyProps> = ({
   onGenerateQuestions,
   onStartGame,
   isGenerating,
+  accountRole,
+  accountUsername,
+  onOpenAccountManager,
+  onLogout,
 }) => {
   const [roomCodeInput, setRoomCodeInput] = useState('');
-  const [playerNameInput, setPlayerNameInput] = useState('');
+  const [playerNameInput, setPlayerNameInput] = useState(accountUsername);
   const [selectedAvatar, setSelectedAvatar] = useState('🦁');
   const [customTopic, setCustomTopic] = useState('');
   const [mode, setMode] = useState<'welcome' | 'join_player' | 'create_mc'>('welcome');
@@ -42,6 +50,23 @@ export const Lobby: React.FC<LobbyProps> = ({
     return (
       <div className="min-h-[85vh] flex items-center justify-center px-4 py-8">
         <div className="max-w-xl w-full bg-white/80 border border-stone-200/80 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-stone-200/60 backdrop-blur-md">
+          <div className="mb-6 flex items-center justify-between border-b border-stone-200 pb-4 text-slate-700">
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <UserCog className="h-4 w-4" /> {accountUsername}
+              <span className="rounded-full bg-stone-100 px-2 py-1 text-[10px] uppercase">{accountRole === 'admin' ? 'Admin' : 'Người chơi'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {accountRole === 'admin' && (
+                <button onClick={onOpenAccountManager} className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold hover:bg-stone-100">
+                  Quản lý tài khoản
+                </button>
+              )}
+              <button onClick={onLogout} className="rounded-xl border border-stone-200 p-2 hover:bg-stone-100" aria-label="Đăng xuất">
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
           {/* Header Badge */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-700 font-bold text-2xl shadow-sm mb-4">
@@ -54,19 +79,23 @@ export const Lobby: React.FC<LobbyProps> = ({
 
           {mode === 'welcome' && (
             <div className="space-y-4">
-              <button
-                onClick={() => setMode('join_player')}
-                className="w-full py-4 px-6 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-base flex items-center justify-center gap-3 shadow-lg shadow-teal-600/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-              >
-                <UserCheck className="w-5 h-5 stroke-[1.75]" /> THAM GIA THI ĐẤU
-              </button>
+              {accountRole === 'player' && (
+                <button
+                  onClick={() => setMode('join_player')}
+                  className="w-full py-4 px-6 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-base flex items-center justify-center gap-3 shadow-lg shadow-teal-600/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  <UserCheck className="w-5 h-5 stroke-[1.75]" /> THAM GIA THI ĐẤU
+                </button>
+              )}
 
-              <button
-                onClick={() => setMode('create_mc')}
-                className="w-full py-4 px-6 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200/80 text-slate-700 font-bold text-base flex items-center justify-center gap-3 shadow-sm transition-all"
-              >
-                <Shield className="w-5 h-5 text-teal-600 stroke-[1.75]" /> TẠO PHÒNG MỚI
-              </button>
+              {accountRole === 'admin' && (
+                <button
+                  onClick={() => setMode('create_mc')}
+                  className="w-full py-4 px-6 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200/80 text-slate-700 font-bold text-base flex items-center justify-center gap-3 shadow-sm transition-all"
+                >
+                  <Shield className="w-5 h-5 text-teal-600 stroke-[1.75]" /> TẠO PHÒNG MỚI
+                </button>
+              )}
             </div>
           )}
 
@@ -175,6 +204,18 @@ export const Lobby: React.FC<LobbyProps> = ({
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="bg-white/80 border border-stone-200/80 rounded-3xl p-6 sm:p-10 shadow-2xl shadow-stone-200/60 backdrop-blur-md">
+        <div className="mb-5 flex items-center justify-end gap-2 text-slate-700">
+          <span className="mr-auto text-xs font-bold">Đăng nhập: {accountUsername}</span>
+          {accountRole === 'admin' && (
+            <button onClick={onOpenAccountManager} className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold hover:bg-stone-100">
+              Quản lý tài khoản
+            </button>
+          )}
+          <button onClick={onLogout} className="rounded-xl border border-stone-200 p-2 hover:bg-stone-100" aria-label="Đăng xuất">
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-stone-200/80 pb-6 mb-6">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-teal-700">PHÒNG CHỜ THI ĐẤU</span>

@@ -1,4 +1,14 @@
 export type Role = 'admin' | 'player' | 'spectator';
+export type AccountRole = 'admin' | 'player';
+
+export interface AuthUser {
+  username: string;
+  role: AccountRole;
+}
+
+export interface AccountSummary extends AuthUser {
+  createdAt: number;
+}
 
 export type RoundType = 'warmup' | 'obstacle' | 'acceleration' | 'finish' | 'summary';
 
@@ -156,6 +166,16 @@ export interface GameState {
 }
 
 export type WSMessageType =
+  | 'AUTH_LOGIN'
+  | 'AUTH_RESTORE'
+  | 'AUTH_LOGOUT'
+  | 'AUTH_SUCCESS'
+  | 'AUTH_ERROR'
+  | 'LIST_ACCOUNTS'
+  | 'CREATE_ACCOUNT'
+  | 'DELETE_ACCOUNT'
+  | 'ACCOUNT_LIST'
+  | 'ACCOUNT_CREATED'
   | 'INIT_STATE'
   | 'STATE_UPDATE'
   | 'JOIN_ROOM'
@@ -184,5 +204,6 @@ export interface WSMessage {
   roomId?: string;
   role?: Role;
   playerId?: string;
+  authToken?: string;
   payload?: any;
 }

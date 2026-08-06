@@ -1,16 +1,87 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
-import { GameState, OlympiaQuestions, WSMessage, RoundType } from './src/types.js';
+import { AccountRole, GameState, OlympiaQuestions, WSMessage, RoundType } from './src/types.js';
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+
+interface AccountRecord {
+  username: string;
+  role: AccountRole;
+  passwordHash: string;
+  createdAt: number;
+}
+
+interface AuthSession {
+  username: string;
+  role: AccountRole;
+}
+
+const accountsFilePath = path.join(process.cwd(), 'data', 'accounts.json');
+
+function hashPassword(password: string) {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, storedHash: string) {
+  try {
+    const [salt, hashHex] = storedHash.split(':');
+    const storedBuffer = Buffer.from(hashHex, 'hex');
+    const suppliedBuffer = scryptSync(password, salt, storedBuffer.length);
+    return storedBuffer.length === suppliedBuffer.length && timingSafeEqual(storedBuffer, suppliedBuffer);
+  } catch {
+    return false;
+  }
+}
+
+function saveAccounts(accounts: Map<string, AccountRecord>) {
+  fs.mkdirSync(path.dirname(accountsFilePath), { recursive: true });
+  const temporaryPath = `${accountsFilePath}.tmp`;
+  fs.writeFileSync(temporaryPath, JSON.stringify([...accounts.values()], null, 2), 'utf8');
+  fs.renameSync(temporaryPath, accountsFilePath);
+}
+
+function loadAccounts() {
+  const accounts = new Map<string, AccountRecord>();
+
+  try {
+    if (fs.existsSync(accountsFilePath)) {
+      const storedAccounts = JSON.parse(fs.readFileSync(accountsFilePath, 'utf8')) as AccountRecord[];
+      for (const account of storedAccounts) {
+        accounts.set(account.username.toLowerCase(), account);
+      }
+    }
+  } catch (error) {
+    console.error('Không thể đọc dữ liệu tài khoản:', error);
+  }
+
+  const adminAccount = accounts.get('tuancd');
+  if (!adminAccount || adminAccount.role !== 'admin' || !verifyPassword('6868', adminAccount.passwordHash)) {
+    accounts.set('tuancd', {
+      username: 'tuancd',
+      role: 'admin',
+      passwordHash: hashPassword('6868'),
+      createdAt: adminAccount?.createdAt || Date.now(),
+    });
+    saveAccounts(accounts);
+  }
+
+  return accounts;
+}
+
+const accounts = loadAccounts();
+const authSessions = new Map<string, AuthSession>();
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({
@@ -415,7 +486,153 @@ wss.on('connection', (ws) => {
   ws.on('message', async (data) => {
     try {
       const msg: WSMessage = JSON.parse(data.toString());
-      const { type, roomId, role, playerId, payload } = msg;
+      const {
+        type,
+        roomId,
+        role: requestedRole,
+        playerId: requestedPlayerId,
+        authToken,
+        payload,
+      } = msg;
+
+      if (type === 'AUTH_LOGIN') {
+        const username = String(payload?.username || '').trim().toLowerCase();
+        const password = String(payload?.password || '');
+        const account = accounts.get(username);
+
+        if (!account || !verifyPassword(password, account.passwordHash)) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Tên đăng nhập hoặc mật khẩu không đúng.' }));
+          return;
+        }
+
+        const token = randomUUID();
+        authSessions.set(token, { username: account.username, role: account.role });
+        ws.send(JSON.stringify({
+          type: 'AUTH_SUCCESS',
+          payload: {
+            token,
+            user: { username: account.username, role: account.role },
+            playerId: account.role === 'player' ? `user_${account.username}` : undefined,
+          },
+        }));
+        return;
+      }
+
+      if (type === 'AUTH_RESTORE') {
+        const session = authToken ? authSessions.get(authToken) : undefined;
+        if (!session) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Phiên đăng nhập đã hết hạn.' }));
+          return;
+        }
+
+        ws.send(JSON.stringify({
+          type: 'AUTH_SUCCESS',
+          payload: {
+            token: authToken,
+            user: session,
+            playerId: session.role === 'player' ? `user_${session.username}` : undefined,
+          },
+        }));
+        return;
+      }
+
+      if (type === 'AUTH_LOGOUT') {
+        if (authToken) authSessions.delete(authToken);
+        const connectionInfo = clientRoomMap.get(ws);
+        if (connectionInfo) {
+          clientRoomMap.delete(ws);
+          const activeRoom = rooms.get(connectionInfo.roomId);
+          if (activeRoom && connectionInfo.playerId) {
+            const player = activeRoom.players.find((candidate) => candidate.id === connectionInfo.playerId);
+            if (player) {
+              player.isOnline = false;
+              broadcastRoomState(connectionInfo.roomId);
+            }
+          }
+        }
+        return;
+      }
+
+      const authSession = authToken ? authSessions.get(authToken) : undefined;
+      if (!authSession) {
+        ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Bạn cần đăng nhập để tiếp tục.' }));
+        return;
+      }
+
+      if (type === 'LIST_ACCOUNTS') {
+        if (authSession.role !== 'admin') {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Chỉ admin được quản lý tài khoản.' }));
+          return;
+        }
+        ws.send(JSON.stringify({
+          type: 'ACCOUNT_LIST',
+          payload: [...accounts.values()].map(({ username, role, createdAt }) => ({ username, role, createdAt })),
+        }));
+        return;
+      }
+
+      if (type === 'CREATE_ACCOUNT') {
+        if (authSession.role !== 'admin') {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Chỉ admin được tạo tài khoản.' }));
+          return;
+        }
+
+        const username = String(payload?.username || '').trim().toLowerCase();
+        const password = String(payload?.password || '');
+        if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Tên đăng nhập cần 3–30 ký tự: chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.' }));
+          return;
+        }
+        if (password.length < 4) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Mật khẩu phải có ít nhất 4 ký tự.' }));
+          return;
+        }
+        if (accounts.has(username)) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Tên đăng nhập đã tồn tại.' }));
+          return;
+        }
+
+        accounts.set(username, {
+          username,
+          role: 'player',
+          passwordHash: hashPassword(password),
+          createdAt: Date.now(),
+        });
+        saveAccounts(accounts);
+        ws.send(JSON.stringify({ type: 'ACCOUNT_CREATED', payload: { username } }));
+        ws.send(JSON.stringify({
+          type: 'ACCOUNT_LIST',
+          payload: [...accounts.values()].map(({ username, role, createdAt }) => ({ username, role, createdAt })),
+        }));
+        return;
+      }
+
+      if (type === 'DELETE_ACCOUNT') {
+        if (authSession.role !== 'admin') {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Chỉ admin được xóa tài khoản.' }));
+          return;
+        }
+        const username = String(payload?.username || '').trim().toLowerCase();
+        const account = accounts.get(username);
+        if (!account || account.role === 'admin') {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Không thể xóa tài khoản này.' }));
+          return;
+        }
+
+        accounts.delete(username);
+        for (const [token, session] of authSessions.entries()) {
+          if (session.username === username) authSessions.delete(token);
+        }
+        saveAccounts(accounts);
+        ws.send(JSON.stringify({
+          type: 'ACCOUNT_LIST',
+          payload: [...accounts.values()].map(({ username: name, role, createdAt }) => ({ username: name, role, createdAt })),
+        }));
+        return;
+      }
+
+      const role = authSession.role;
+      const playerId = role === 'player' ? `user_${authSession.username}` : requestedPlayerId;
 
       if (!roomId) return;
 
@@ -443,6 +660,10 @@ wss.on('connection', (ws) => {
       }
 
       if (type === 'CREATE_ROOM') {
+        if (role !== 'admin') {
+          ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ admin được tạo phòng.' }));
+          return;
+        }
         room = createRoom(roomId, payload?.code);
         clientRoomMap.set(ws, { roomId, role: 'admin' });
         addRoomLog(room, 'Admin MC đã kết nối quản lý phòng thi.', 'info');
@@ -460,6 +681,10 @@ wss.on('connection', (ws) => {
 
       switch (type) {
         case 'JOIN_ROOM': {
+          if (role !== 'player') {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ tài khoản người chơi được tham gia thi đấu.' }));
+            return;
+          }
           if (role === 'player') {
             const playerName = payload?.name || `Thí sinh ${room.players.length + 1}`;
             const existingIndex = room.players.findIndex((p) => p.id === playerId);
