@@ -26,6 +26,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // In-Memory Game Rooms
 const rooms = new Map<string, GameState>();
+const accelerationAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // Map WebSocket connections to { roomId, role, playerId }
 const clientRoomMap = new Map<WebSocket, { roomId: string; role: string; playerId?: string }>();
 
@@ -62,6 +63,18 @@ function addRoomLog(room: GameState, message: string, type: 'info' | 'success' |
   if (room.logs.length > 50) {
     room.logs.pop();
   }
+}
+
+function recordAnswerResult(
+  player: GameState['players'][number],
+  isCorrect: boolean,
+  pointsAwarded: number
+) {
+  player.lastAnswerResult = {
+    isCorrect,
+    pointsAwarded,
+    timestamp: Date.now(),
+  };
 }
 
 // Default fallback questions in case Gemini key is missing or fails
@@ -587,13 +600,16 @@ wss.on('connection', (ws) => {
               const points = q?.points || 10;
 
               if (actionType === 'skip') {
+                recordAnswerResult(player, false, 0);
                 addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA câu hỏi. (Đáp án chuẩn: "${q?.answer || ''}")`, 'info');
               } else {
                 const isCorrect = q ? checkAnswerCorrectness(answerText, q.answer) : false;
                 if (isCorrect) {
                   player.score += points;
+                  recordAnswerResult(player, true, points);
                   addRoomLog(room, `✅ CHÍNH XÁC! ${player.name} trả lời ĐÚNG ("${answerText}")! (+${points}đ)`, 'success');
                 } else {
+                  recordAnswerResult(player, false, 0);
                   addRoomLog(room, `❌ KHÔNG CHÍNH XÁC! ${player.name} trả lời SAI ("${answerText}"). Đáp án chuẩn: "${q?.answer || ''}"`, 'warning');
                 }
               }
@@ -606,17 +622,20 @@ wss.on('connection', (ws) => {
               const clue = room.questions?.obstacle.clues.find((c) => c.number === clueNum);
               if (clue) {
                 if (actionType === 'skip') {
+                  recordAnswerResult(player, false, 0);
                   addRoomLog(room, `⏭️ ${player.name} BỎ QUA câu hỏi Hàng ngang số ${clueNum}.`, 'info');
                 } else {
                   const isCorrect = checkAnswerCorrectness(answerText, clue.answer);
                   if (isCorrect) {
                     player.score += 10;
+                    recordAnswerResult(player, true, 10);
                     clue.isOpened = true;
                     if (!room.obstacleState?.openedClues.includes(clueNum!)) {
                       room.obstacleState?.openedClues.push(clueNum!);
                     }
                     addRoomLog(room, `✅ CHÍNH XÁC! ${player.name} trả lời ĐÚNG Hàng ngang số ${clueNum} ("${answerText}")! (+10đ)`, 'success');
                   } else {
+                    recordAnswerResult(player, false, 0);
                     addRoomLog(room, `❌ SAI RỒI! ${player.name} trả lời SAI Hàng ngang số ${clueNum} ("${answerText}"). Đáp án chuẩn: "${clue.answer}"`, 'warning');
                   }
                 }
@@ -671,6 +690,55 @@ wss.on('connection', (ws) => {
                 room.accelerationState.playerSubmissions.push(subObj);
               }
             }
+
+            const submittedAnswer = room.accelerationState.playerSubmissions.find(
+              (submission) => submission.playerId === player.id
+            );
+            if (submittedAnswer) {
+              recordAnswerResult(
+                player,
+                submittedAnswer.isCorrect === true,
+                submittedAnswer.pointsAwarded || 0
+              );
+            }
+
+            const participatingPlayers = room.players.filter((p) => p.isOnline !== false);
+            const allPlayersSubmitted =
+              participatingPlayers.length > 0 &&
+              participatingPlayers.every((p) =>
+                room.accelerationState?.playerSubmissions.some((submission) => submission.playerId === p.id)
+              );
+            const accelerationQuestions = room.questions?.acceleration || [];
+            const hasNextQuestion = room.currentQuestionIndex < accelerationQuestions.length - 1;
+
+            if (allPlayersSubmitted && hasNextQuestion && !accelerationAdvanceTimers.has(roomId)) {
+              const completedQuestionIndex = room.currentQuestionIndex;
+              room.timerActive = false;
+              addRoomLog(room, `Tất cả thí sinh đã hoàn thành. Tự động chuyển câu tiếp theo...`, 'info');
+
+              const advanceTimer = setTimeout(() => {
+                accelerationAdvanceTimers.delete(roomId);
+                const activeRoom = rooms.get(roomId);
+                if (
+                  !activeRoom ||
+                  activeRoom.currentRound !== 'acceleration' ||
+                  activeRoom.currentQuestionIndex !== completedQuestionIndex ||
+                  !activeRoom.accelerationState
+                ) {
+                  return;
+                }
+
+                activeRoom.currentQuestionIndex += 1;
+                activeRoom.accelerationState.currentQuestionIndex = activeRoom.currentQuestionIndex;
+                activeRoom.accelerationState.playerSubmissions = [];
+                activeRoom.timerSeconds = 30;
+                activeRoom.timerActive = true;
+                addRoomLog(activeRoom, `Tự động chuyển sang câu Tăng tốc ${activeRoom.currentQuestionIndex + 1}.`, 'info');
+                broadcastRoomState(roomId);
+              }, 1500);
+
+              accelerationAdvanceTimers.set(roomId, advanceTimer);
+            }
           } else if (room.currentRound === 'finish' && room.finishState) {
             const turnPlayerId = room.finishState.activeTurnPlayerId;
             const qIndex = room.finishState.questionIndex || 0;
@@ -690,6 +758,7 @@ wss.on('connection', (ws) => {
                 if (deduct > 0) {
                   player.score = Math.max(0, player.score - deduct);
                 }
+                recordAnswerResult(player, false, 0);
                 addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA câu Về đích${starActive ? ` (-${deduct}đ do Ngôi sao hy vọng)` : ''}. Các thí sinh khác có thể BẤM CHUÔNG CƯỚP ĐIỂM!`, 'warning');
                 room.finishState.turnPhase = 'stealer_buzzer';
               } else {
@@ -697,6 +766,7 @@ wss.on('connection', (ws) => {
                 if (isCorrect) {
                   const pts = starActive ? basePoints * 2 : basePoints;
                   player.score += pts;
+                  recordAnswerResult(player, true, pts);
                   addRoomLog(room, `🎉 CHÍNH XÁC! ${player.name} trả lời ĐÚNG câu Về đích ("${answerText}")${starActive ? ' (CÓ NGÔI SAO HY VỌNG!)' : ''}! (+${pts}đ)`, 'success');
                   room.finishState.turnPhase = 'completed';
                 } else {
@@ -704,6 +774,7 @@ wss.on('connection', (ws) => {
                   if (deduct > 0) {
                     player.score = Math.max(0, player.score - deduct);
                   }
+                  recordAnswerResult(player, false, 0);
                   addRoomLog(room, `❌ SAI RỒI! ${player.name} trả lời SAI ("${answerText}")${starActive ? ` (-${deduct}đ do Ngôi sao hy vọng)` : ''}. Đáp án chuẩn: "${q?.answer || ''}". Các thí sinh khác có thể BẤM CHUÔNG CƯỚP ĐIỂM!`, 'warning');
                   room.finishState.turnPhase = 'stealer_buzzer';
                 }
@@ -715,15 +786,18 @@ wss.on('connection', (ws) => {
               if (room.activeBuzzer) room.activeBuzzer.answer = answerText;
 
               if (actionType === 'skip') {
+                recordAnswerResult(player, false, 0);
                 addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA cướp điểm.`, 'info');
               } else {
                 const isCorrect = q ? checkAnswerCorrectness(answerText, q.answer) : false;
                 if (isCorrect) {
                   player.score += basePoints;
+                  recordAnswerResult(player, true, basePoints);
                   addRoomLog(room, `⚡ CƯỚP ĐIỂM THÀNH CÔNG! ${player.name} trả lời ĐÚNG ("${answerText}")! (+${basePoints}đ)`, 'success');
                 } else {
                   const deduct = Math.round(basePoints / 2);
                   player.score = Math.max(0, player.score - deduct);
+                  recordAnswerResult(player, false, 0);
                   addRoomLog(room, `❌ CƯỚP ĐIỂM THẤT BẠI! ${player.name} trả lời SAI ("${answerText}") (-${deduct}đ). Đáp án chuẩn: "${q?.answer || ''}"`, 'warning');
                 }
               }
@@ -761,6 +835,7 @@ wss.on('connection', (ws) => {
           const guess = (payload?.keyword || '').trim();
 
           if (actionType === 'skip') {
+            recordAnswerResult(player, false, 0);
             addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA đoán Từ khóa Chướng ngại vật.`, 'info');
           } else {
             const target = room.questions.obstacle.keyword;
@@ -770,6 +845,7 @@ wss.on('connection', (ws) => {
               const openedCount = room.obstacleState?.openedClues.length || 0;
               const points = openedCount <= 1 ? 60 : openedCount === 2 ? 50 : openedCount === 3 ? 40 : 30;
               player.score += points;
+              recordAnswerResult(player, true, points);
 
               if (room.obstacleState) {
                 room.obstacleState.keywordGuessed = true;
@@ -780,6 +856,7 @@ wss.on('connection', (ws) => {
 
               addRoomLog(room, `🎉 CHÚC MỪNG! ${player.name} ĐÃ GIẢI ĐƯỢC CHƯỚNG NGẠI VẬT ("${target}") & CỘNG ${points} ĐIỂM!`, 'success');
             } else {
+              recordAnswerResult(player, false, 0);
               addRoomLog(room, `❌ ${player.name} đoán từ khóa SAI ("${guess}").`, 'warning');
             }
           }
@@ -820,7 +897,20 @@ wss.on('connection', (ws) => {
 
           // Advance question index if specified
           if (payload?.nextQuestion) {
+            const pendingAccelerationAdvance = accelerationAdvanceTimers.get(roomId);
+            if (pendingAccelerationAdvance) {
+              clearTimeout(pendingAccelerationAdvance);
+              accelerationAdvanceTimers.delete(roomId);
+            }
+
             room.currentQuestionIndex += 1;
+
+            if (room.currentRound === 'acceleration' && room.accelerationState) {
+              room.accelerationState.currentQuestionIndex = room.currentQuestionIndex;
+              room.accelerationState.playerSubmissions = [];
+              room.timerSeconds = 30;
+              room.timerActive = true;
+            }
 
             if (room.currentRound === 'finish' && room.finishState) {
               room.finishState.questionIndex += 1;

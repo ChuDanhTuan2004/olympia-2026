@@ -10,6 +10,7 @@ import { VictoryModal } from './components/VictoryModal';
 import { AdminControlDrawer } from './components/AdminControlDrawer';
 import { TopNavControls } from './components/TopNavControls';
 import { RulesModal } from './components/RulesModal';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 export default function App() {
   const [room, setRoom] = useState<GameState | null>(null);
@@ -18,11 +19,34 @@ export default function App() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number } | null>(null);
 
   // Rules Modal State
   const [showRulesModal, setShowRulesModal] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const shownAnswerResultTimestamp = useRef<number>();
+
+  const playerAnswerResult = room?.players.find((player) => player.id === playerId)?.lastAnswerResult;
+
+  useEffect(() => {
+    if (
+      role !== 'player' ||
+      !playerAnswerResult ||
+      shownAnswerResultTimestamp.current === playerAnswerResult.timestamp
+    ) {
+      return;
+    }
+
+    shownAnswerResultTimestamp.current = playerAnswerResult.timestamp;
+    setAnswerResult({
+      isCorrect: playerAnswerResult.isCorrect,
+      pointsAwarded: playerAnswerResult.pointsAwarded,
+    });
+
+    const closeTimer = window.setTimeout(() => setAnswerResult(null), 1000);
+    return () => window.clearTimeout(closeTimer);
+  }, [role, playerAnswerResult?.timestamp, playerAnswerResult?.isCorrect, playerAnswerResult?.pointsAwarded]);
 
   // Initialize unique playerId if not present
   useEffect(() => {
@@ -200,6 +224,26 @@ export default function App() {
       {errorMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-teal-800 text-white font-bold px-6 py-3 rounded-2xl shadow-2xl border border-teal-600 animate-bounce text-sm">
           ⚠️ {errorMessage}
+        </div>
+      )}
+
+      {role === 'player' && answerResult && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-neutral-200 bg-white p-8 text-center text-black shadow-2xl animate-fadeIn">
+            {answerResult.isCorrect ? (
+              <CheckCircle2 className="mx-auto mb-4 h-16 w-16 stroke-[1.5]" />
+            ) : (
+              <XCircle className="mx-auto mb-4 h-16 w-16 stroke-[1.5]" />
+            )}
+            <h2 className="text-2xl font-black uppercase tracking-tight">
+              {answerResult.isCorrect ? 'Chính xác!' : 'Chưa chính xác'}
+            </h2>
+            <p className="mt-2 text-sm font-medium text-neutral-500">
+              {answerResult.isCorrect
+                ? `Bạn được cộng ${answerResult.pointsAwarded} điểm.`
+                : 'Bạn không được cộng điểm.'}
+            </p>
+          </div>
         </div>
       )}
 

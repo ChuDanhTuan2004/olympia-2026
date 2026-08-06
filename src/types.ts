@@ -11,6 +11,11 @@ export interface Player {
   isReady: boolean;
   isOnline: boolean;
   buzzerTime?: number; // Milliseconds timestamp when buzzer was pressed
+  lastAnswerResult?: {
+    isCorrect: boolean;
+    pointsAwarded: number;
+    timestamp: number;
+  };
 }
 
 export interface WarmUpQuestion {

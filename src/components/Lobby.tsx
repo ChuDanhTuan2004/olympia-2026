@@ -79,7 +79,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                   placeholder="Nhập mã 4 chữ số (VD: 8821)"
                   value={roomCodeInput}
                   onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3.5 text-teal-800 font-mono font-bold text-center text-xl tracking-widest focus:outline-none focus:border-teal-500 shadow-inner"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3.5 text-teal-800 font-mono font-bold text-center text-xl tracking-widest placeholder:font-sans placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:border-teal-500 shadow-inner"
                   required
                 />
               </div>

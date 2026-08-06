@@ -27,6 +27,11 @@ export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
   const [answerInput, setAnswerInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
+  React.useEffect(() => {
+    setAnswerInput('');
+    setHasSubmitted(false);
+  }, [room.currentQuestionIndex]);
+
   if (!q) {
     return <div className="text-center py-12 text-slate-400">Chưa có dữ liệu Vòng Tăng Tốc.</div>;
   }
