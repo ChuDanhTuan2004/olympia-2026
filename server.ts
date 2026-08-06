@@ -470,7 +470,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     const data: OlympiaQuestions = JSON.parse(text);
     // Ensure clues have isOpened set to false initially
     if (data.obstacle && data.obstacle.clues) {
-      data.obstacle.clues.forEach((c) => (c.isOpened = false));
+      data.obstacle.clues.forEach((c) => {
+        c.isOpened = false;
+        c.isAnswered = false;
+      });
       data.obstacle.isKeywordRevealed = false;
     }
 
@@ -578,6 +581,136 @@ function allWarmupPlayersAttempted(room: GameState) {
   );
 }
 
+function createObstacleState(room: GameState): NonNullable<GameState['obstacleState']> {
+  const rankedPlayers = room.players
+    .map((player) => ({ player, tieBreaker: Math.random() }))
+    .sort((a, b) => a.player.score - b.player.score || a.tieBreaker - b.tieBreaker)
+    .map(({ player }) => player.id);
+  const clueCount = room.questions?.obstacle.clues.length || 0;
+  const selectionOrder = Array.from(
+    { length: clueCount },
+    (_, index) => rankedPlayers[index % Math.max(rankedPlayers.length, 1)]
+  ).filter(Boolean);
+
+  return {
+    openedClues: [],
+    keywordGuessed: false,
+    selectionOrder,
+    selectionTurnIndex: 0,
+    phase: 'selecting_clue',
+    clueSubmissions: [],
+    eliminatedPlayerIds: [],
+  };
+}
+
+function initializeObstacleRound(room: GameState) {
+  room.currentRound = 'obstacle';
+  room.currentQuestionIndex = 0;
+  room.obstacleState = createObstacleState(room);
+  if (room.questions?.obstacle) {
+    room.questions.obstacle.isKeywordRevealed = false;
+    room.questions.obstacle.clues.forEach((clue) => {
+      clue.isOpened = false;
+      clue.isAnswered = false;
+    });
+  }
+  room.activeBuzzer = undefined;
+  room.buzzerLocked = false;
+  room.timerSeconds = 0;
+  room.timerActive = false;
+}
+
+function advanceObstacleSelection(room: GameState) {
+  const state = room.obstacleState;
+  if (!state) return;
+
+  const completedClue = room.questions?.obstacle.clues.find(
+    (clue) => clue.number === state.currentClueIndex
+  );
+  if (completedClue) {
+    completedClue.isAnswered = state.clueSubmissions.some(
+      (submission) => submission.isCorrect
+    );
+  }
+  state.currentClueIndex = undefined;
+  state.clueSubmissions = [];
+  state.selectionTurnIndex += 1;
+  while (
+    state.selectionTurnIndex < state.selectionOrder.length &&
+    state.eliminatedPlayerIds.includes(state.selectionOrder[state.selectionTurnIndex])
+  ) {
+    state.selectionTurnIndex += 1;
+  }
+
+  if (state.selectionTurnIndex < state.selectionOrder.length) {
+    state.phase = 'selecting_clue';
+    room.timerSeconds = 0;
+    room.timerActive = false;
+  } else {
+    state.phase = 'final_keyword_window';
+    room.timerSeconds = 20;
+    room.timerActive = true;
+  }
+}
+
+function obstacleEligiblePlayers(room: GameState) {
+  return room.players.filter(
+    (player) =>
+      player.isOnline !== false &&
+      !room.obstacleState?.eliminatedPlayerIds.includes(player.id)
+  );
+}
+
+function resumeObstacleAfterKeywordAttempt(room: GameState) {
+  const state = room.obstacleState;
+  if (!state) return;
+  state.phase = state.resumePhase || 'selecting_clue';
+  const resumeSeconds = state.resumeTimerSeconds;
+  state.resumePhase = undefined;
+  state.resumeTimerSeconds = undefined;
+  if (state.phase === 'answering_clue' && state.currentClueIndex) {
+    room.timerSeconds = resumeSeconds || 30;
+    room.timerActive = true;
+  } else if (state.phase === 'final_keyword_window') {
+    room.timerSeconds = resumeSeconds || 20;
+    room.timerActive = true;
+  } else {
+    room.timerSeconds = 0;
+    room.timerActive = false;
+  }
+  room.activeBuzzer = undefined;
+  room.buzzerLocked = false;
+
+  const selectorId = state.selectionOrder[state.selectionTurnIndex];
+  if (
+    state.phase === 'selecting_clue' &&
+    selectorId &&
+    state.eliminatedPlayerIds.includes(selectorId)
+  ) {
+    advanceObstacleSelection(room);
+  } else if (
+    state.phase === 'answering_clue' &&
+    obstacleEligiblePlayers(room).every((player) =>
+      state.clueSubmissions.some((submission) => submission.playerId === player.id)
+    )
+  ) {
+    advanceObstacleSelection(room);
+  }
+}
+
+function initializeAccelerationRound(room: GameState) {
+  room.currentRound = 'acceleration';
+  room.currentQuestionIndex = 0;
+  room.accelerationState = {
+    currentQuestionIndex: 0,
+    playerSubmissions: [],
+  };
+  room.activeBuzzer = undefined;
+  room.buzzerLocked = false;
+  room.timerSeconds = 30;
+  room.timerActive = true;
+}
+
 function revealWarmupAnswer(room: GameState, reason: 'all_failed' | 'no_buzzer') {
   const question = room.questions?.warmup[room.currentQuestionIndex];
   if (!room.warmupState || !question) return;
@@ -606,22 +739,7 @@ function advanceWarmupQuestion(roomId: string, room: GameState) {
     addRoomLog(room, `Chuyển sang câu Khởi động ${room.currentQuestionIndex + 1}.`, 'info');
   } else {
     if (room.warmupState) room.warmupState.phase = 'completed';
-    room.currentRound = 'obstacle';
-    room.currentQuestionIndex = 0;
-    room.obstacleState = {
-      openedClues: [],
-      keywordGuessed: false,
-    };
-    if (room.questions?.obstacle) {
-      room.questions.obstacle.isKeywordRevealed = false;
-      room.questions.obstacle.clues.forEach((clue) => {
-        clue.isOpened = false;
-      });
-    }
-    room.activeBuzzer = undefined;
-    room.buzzerLocked = false;
-    room.timerSeconds = 90;
-    room.timerActive = true;
+    initializeObstacleRound(room);
     addRoomLog(room, 'Hoàn thành vòng Khởi động. Tự động chuyển sang Vượt chướng ngại vật.', 'success');
   }
   broadcastRoomState(roomId);
@@ -723,6 +841,46 @@ setInterval(() => {
             revealWarmupAnswer(room, 'no_buzzer');
           }
 
+          broadcastRoomState(roomId);
+          continue;
+        }
+
+        if (room.currentRound === 'obstacle' && room.obstacleState) {
+          if (room.obstacleState.phase === 'keyword_answering') {
+            const timedOutPlayer = room.players.find(
+              (player) => player.id === room.activeBuzzer?.playerId
+            );
+            if (timedOutPlayer) {
+              if (!room.obstacleState.eliminatedPlayerIds.includes(timedOutPlayer.id)) {
+                room.obstacleState.eliminatedPlayerIds.push(timedOutPlayer.id);
+              }
+              recordAnswerResult(timedOutPlayer, false, 0);
+              addRoomLog(
+                room,
+                `${timedOutPlayer.name} hết 30 giây đoán chướng ngại vật và bị loại khỏi phần thi này.`,
+                'warning'
+              );
+            }
+            resumeObstacleAfterKeywordAttempt(room);
+          } else if (room.obstacleState.phase === 'answering_clue') {
+            addRoomLog(room, 'Hết thời gian trả lời hàng ngang. Chuyển quyền chọn cho thí sinh tiếp theo.', 'info');
+            advanceObstacleSelection(room);
+          } else if (room.obstacleState.phase === 'final_keyword_window') {
+            room.questions!.obstacle.isKeywordRevealed = true;
+            room.obstacleState.phase = 'revealing_keyword';
+            room.activeBuzzer = undefined;
+            room.buzzerLocked = true;
+            room.timerSeconds = 5;
+            room.timerActive = true;
+            addRoomLog(
+              room,
+              `Không ai giải được Chướng ngại vật. Đáp án: "${room.questions!.obstacle.keyword}".`,
+              'info'
+            );
+          } else if (room.obstacleState.phase === 'revealing_keyword') {
+            initializeAccelerationRound(room);
+            addRoomLog(room, 'Tự động chuyển sang vòng Tăng tốc.', 'success');
+          }
           broadcastRoomState(roomId);
           continue;
         }
@@ -1055,10 +1213,7 @@ wss.on('connection', (ws) => {
           // Reset round indexes
           room.currentQuestionIndex = 0;
           if (room.questions?.obstacle) {
-            room.obstacleState = {
-              openedClues: [],
-              keywordGuessed: false,
-            };
+            room.obstacleState = createObstacleState(room);
           }
 
           addRoomLog(
@@ -1134,11 +1289,9 @@ wss.on('connection', (ws) => {
           if (nextR === 'warmup') {
             resetWarmupQuestion(room);
           } else if (nextR === 'obstacle') {
-            room.timerSeconds = 90;
-            room.obstacleState = { openedClues: [], keywordGuessed: false };
+            initializeObstacleRound(room);
           } else if (nextR === 'acceleration') {
-            room.timerSeconds = 30;
-            room.accelerationState = { currentQuestionIndex: 0, playerSubmissions: [] };
+            initializeAccelerationRound(room);
           } else if (nextR === 'finish') {
             room.timerSeconds = 40;
             const activePId = room.players[0]?.id;
@@ -1174,6 +1327,28 @@ wss.on('connection', (ws) => {
             }
             room.warmupState.phase = 'answering';
             room.timerSeconds = 20;
+            room.timerActive = true;
+          } else if (room.currentRound === 'obstacle') {
+            const state = room.obstacleState;
+            if (
+              !state ||
+              room.questions?.obstacle.isKeywordRevealed ||
+              state.phase === 'keyword_answering' ||
+              state.eliminatedPlayerIds.includes(player.id)
+            ) {
+              return;
+            }
+            state.resumePhase =
+              state.phase === 'answering_clue'
+                ? 'answering_clue'
+                : state.phase === 'final_keyword_window'
+                  ? 'final_keyword_window'
+                : state.phase === 'completed'
+                  ? 'completed'
+                  : 'selecting_clue';
+            state.resumeTimerSeconds = room.timerSeconds;
+            state.phase = 'keyword_answering';
+            room.timerSeconds = 30;
             room.timerActive = true;
           }
 
@@ -1255,33 +1430,6 @@ wss.on('connection', (ws) => {
               }
               room.activeBuzzer = undefined;
               room.buzzerLocked = room.warmupState.phase !== 'awaiting_buzzer';
-            }
-          } else if (room.currentRound === 'obstacle') {
-            if (room.activeBuzzer?.playerId === player.id) {
-              const clueNum = room.obstacleState?.currentClueIndex;
-              const clue = room.questions?.obstacle.clues.find((c) => c.number === clueNum);
-              if (clue) {
-                if (actionType === 'skip') {
-                  recordAnswerResult(player, false, 0);
-                  addRoomLog(room, `⏭️ ${player.name} BỎ QUA câu hỏi Hàng ngang số ${clueNum}.`, 'info');
-                } else {
-                  const isCorrect = checkAnswerCorrectness(answerText, clue.answer);
-                  if (isCorrect) {
-                    player.score += 10;
-                    recordAnswerResult(player, true, 10);
-                    clue.isOpened = true;
-                    if (!room.obstacleState?.openedClues.includes(clueNum!)) {
-                      room.obstacleState?.openedClues.push(clueNum!);
-                    }
-                    addRoomLog(room, `✅ CHÍNH XÁC! ${player.name} trả lời ĐÚNG Hàng ngang số ${clueNum} ("${answerText}")! (+10đ)`, 'success');
-                  } else {
-                    recordAnswerResult(player, false, 0);
-                    addRoomLog(room, `❌ SAI RỒI! ${player.name} trả lời SAI Hàng ngang số ${clueNum} ("${answerText}"). Đáp án chuẩn: "${clue.answer}"`, 'warning');
-                  }
-                }
-              }
-              room.activeBuzzer = undefined;
-              room.buzzerLocked = false;
             }
           } else if (room.currentRound === 'acceleration' && room.accelerationState) {
             const q = room.questions?.acceleration[room.currentQuestionIndex];
@@ -1453,57 +1601,120 @@ wss.on('connection', (ws) => {
 
         case 'OPEN_OBSTACLE_CLUE': {
           const clueNum = payload?.clueNumber;
-          if (room.questions?.obstacle) {
+          const state = room.obstacleState;
+          const currentSelectorId = state?.selectionOrder[state.selectionTurnIndex];
+          if (
+            role === 'player' &&
+            playerId === currentSelectorId &&
+            state?.phase === 'selecting_clue' &&
+            room.questions?.obstacle
+          ) {
             const clue = room.questions.obstacle.clues.find((c) => c.number === clueNum);
-            if (clue) {
+            if (clue && !clue.isOpened) {
               clue.isOpened = true;
-              if (!room.obstacleState?.openedClues.includes(clueNum)) {
-                room.obstacleState?.openedClues.push(clueNum);
+              if (!state.openedClues.includes(clueNum)) {
+                state.openedClues.push(clueNum);
               }
-              if (room.obstacleState) {
-                room.obstacleState.currentClueIndex = clueNum;
-              }
-              addRoomLog(room, `MC mở Hàng ngang số ${clueNum}`, 'info');
+              state.currentClueIndex = clueNum;
+              state.clueSubmissions = [];
+              state.phase = 'answering_clue';
+              room.timerSeconds = 30;
+              room.timerActive = true;
+              const selector = room.players.find((player) => player.id === playerId);
+              addRoomLog(room, `${selector?.name || 'Thí sinh'} chọn Hàng ngang số ${clueNum}. Tất cả thí sinh có 30 giây trả lời.`, 'info');
             }
+          }
+          break;
+        }
+
+        case 'SUBMIT_OBSTACLE_CLUE_ANSWER': {
+          const state = room.obstacleState;
+          const player = room.players.find((candidate) => candidate.id === playerId);
+          const clue = room.questions?.obstacle.clues.find(
+            (candidate) => candidate.number === state?.currentClueIndex
+          );
+          if (
+            room.currentRound !== 'obstacle' ||
+            !state ||
+            state.phase !== 'answering_clue' ||
+            !player ||
+            !clue ||
+            state.eliminatedPlayerIds.includes(player.id) ||
+            state.clueSubmissions.some((submission) => submission.playerId === player.id)
+          ) {
+            return;
+          }
+
+          const answer = String(payload?.answer || '').trim();
+          if (!answer) return;
+          const isCorrect = checkAnswerCorrectness(answer, clue.answer);
+          state.clueSubmissions.push({ playerId: player.id, answer, isCorrect });
+          if (isCorrect) {
+            player.score += 10;
+            recordAnswerResult(player, true, 10);
+            addRoomLog(room, `✅ ${player.name} trả lời đúng Hàng ngang số ${clue.number} và được cộng 10 điểm.`, 'success');
+          } else {
+            recordAnswerResult(player, false, 0);
+            addRoomLog(room, `❌ ${player.name} trả lời sai Hàng ngang số ${clue.number}.`, 'warning');
+          }
+
+          const eligiblePlayers = obstacleEligiblePlayers(room);
+          const allSubmitted = eligiblePlayers.every((candidate) =>
+            state.clueSubmissions.some((submission) => submission.playerId === candidate.id)
+          );
+          if (allSubmitted) {
+            addRoomLog(room, 'Tất cả thí sinh hợp lệ đã trả lời. Chuyển quyền chọn hàng ngang.', 'info');
+            advanceObstacleSelection(room);
           }
           break;
         }
 
         case 'GUESS_OBSTACLE_KEYWORD': {
           const player = room.players.find((p) => p.id === playerId);
-          if (!player || !room.questions?.obstacle) return;
+          const state = room.obstacleState;
+          if (
+            !player ||
+            !room.questions?.obstacle ||
+            !state ||
+            state.phase !== 'keyword_answering' ||
+            room.activeBuzzer?.playerId !== player.id ||
+            state.eliminatedPlayerIds.includes(player.id)
+          ) {
+            return;
+          }
 
           const actionType: 'confirm' | 'skip' = payload?.actionType || 'confirm';
           const guess = (payload?.keyword || '').trim();
+          const target = room.questions.obstacle.keyword;
+          const isCorrect =
+            actionType !== 'skip' && checkAnswerCorrectness(guess, target);
 
-          if (actionType === 'skip') {
-            recordAnswerResult(player, false, 0);
-            addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA đoán Từ khóa Chướng ngại vật.`, 'info');
+          if (isCorrect) {
+            player.score += 40;
+            recordAnswerResult(player, true, 40);
+            state.keywordGuessed = true;
+            state.keywordWinnerId = player.id;
+            state.keywordPointsAwarded = 40;
+            state.resumePhase = undefined;
+            state.resumeTimerSeconds = undefined;
+            room.questions.obstacle.isKeywordRevealed = true;
+            addRoomLog(room, `🎉 ${player.name} giải đúng Chướng ngại vật ("${target}") và được cộng 40 điểm!`, 'success');
+            initializeAccelerationRound(room);
+            addRoomLog(room, 'Tự động chuyển sang vòng Tăng tốc.', 'success');
           } else {
-            const target = room.questions.obstacle.keyword;
-            const isCorrect = checkAnswerCorrectness(guess, target);
-
-            if (isCorrect) {
-              const openedCount = room.obstacleState?.openedClues.length || 0;
-              const points = openedCount <= 1 ? 60 : openedCount === 2 ? 50 : openedCount === 3 ? 40 : 30;
-              player.score += points;
-              recordAnswerResult(player, true, points);
-
-              if (room.obstacleState) {
-                room.obstacleState.keywordGuessed = true;
-                room.obstacleState.keywordWinnerId = player.id;
-                room.obstacleState.keywordPointsAwarded = points;
-              }
-              room.questions.obstacle.isKeywordRevealed = true;
-
-              addRoomLog(room, `🎉 CHÚC MỪNG! ${player.name} ĐÃ GIẢI ĐƯỢC CHƯỚNG NGẠI VẬT ("${target}") & CỘNG ${points} ĐIỂM!`, 'success');
-            } else {
-              recordAnswerResult(player, false, 0);
-              addRoomLog(room, `❌ ${player.name} đoán từ khóa SAI ("${guess}").`, 'warning');
+            if (!state.eliminatedPlayerIds.includes(player.id)) {
+              state.eliminatedPlayerIds.push(player.id);
             }
+            recordAnswerResult(player, false, 0);
+            addRoomLog(
+              room,
+              actionType === 'skip'
+                ? `${player.name} bỏ qua và mất quyền tham gia phần thi Chướng ngại vật.`
+                : `❌ ${player.name} đoán sai Chướng ngại vật và mất quyền trả lời tất cả câu hỏi còn lại của phần thi.`,
+              'warning'
+            );
+            resumeObstacleAfterKeywordAttempt(room);
           }
-          room.activeBuzzer = undefined;
-          room.buzzerLocked = false;
           break;
         }
 

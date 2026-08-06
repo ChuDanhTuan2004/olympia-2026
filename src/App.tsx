@@ -328,6 +328,10 @@ export default function App() {
     sendMessage('OPEN_OBSTACLE_CLUE', { clueNumber });
   };
 
+  const handleSubmitObstacleClueAnswer = (answer: string) => {
+    sendMessage('SUBMIT_OBSTACLE_CLUE_ANSWER', { answer });
+  };
+
   const handleGuessObstacleKeyword = (keyword: string, actionType: 'confirm' | 'skip' = 'confirm') => {
     sendMessage('GUESS_OBSTACLE_KEYWORD', { keyword, actionType });
   };
@@ -460,8 +464,8 @@ export default function App() {
                 playerId={playerId}
                 onOpenClue={handleOpenClue}
                 onPressBuzzer={handlePressBuzzer}
+                onSubmitClueAnswer={handleSubmitObstacleClueAnswer}
                 onGuessKeyword={handleGuessObstacleKeyword}
-                onJudgeClue={(targetPId, isCorrect) => handleGuessObstacleKeyword(room.questions?.obstacle.keyword || '')}
               />
             )}
 

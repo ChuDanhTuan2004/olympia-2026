@@ -43,6 +43,7 @@ export interface ObstacleClue {
   answer: string;
   letterCount: number;
   isOpened: boolean;
+  isAnswered?: boolean;
 }
 
 export interface ObstacleQuestion {
@@ -132,6 +133,17 @@ export interface GameState {
     keywordGuessed: boolean;
     keywordWinnerId?: string;
     keywordPointsAwarded?: number;
+    selectionOrder: string[];
+    selectionTurnIndex: number;
+    phase: 'selecting_clue' | 'answering_clue' | 'keyword_answering' | 'final_keyword_window' | 'revealing_keyword' | 'completed';
+    resumePhase?: 'selecting_clue' | 'answering_clue' | 'final_keyword_window' | 'completed';
+    resumeTimerSeconds?: number;
+    clueSubmissions: Array<{
+      playerId: string;
+      answer: string;
+      isCorrect: boolean;
+    }>;
+    eliminatedPlayerIds: string[];
   };
 
   accelerationState?: {
@@ -193,6 +205,7 @@ export type WSMessageType =
   | 'JUDGE_ANSWER'
   | 'TOGGLE_STAR_OF_HOPE'
   | 'OPEN_OBSTACLE_CLUE'
+  | 'SUBMIT_OBSTACLE_CLUE_ANSWER'
   | 'GUESS_OBSTACLE_KEYWORD'
   | 'UPDATE_SCORE'
   | 'TIMER_TICK'
