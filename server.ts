@@ -86,9 +86,8 @@ async function persistAccount(account: AccountRecord) {
            created_at = EXCLUDED.created_at`,
         [account.username, account.role, account.passwordHash, account.createdAt]
       );
-      return;
     } catch (err) {
-      console.warn('Lỗi ghi tài khoản vào PostgreSQL, fallback local:', err);
+      console.warn('Lỗi ghi tài khoản vào PostgreSQL:', err);
     }
   }
 
@@ -99,9 +98,8 @@ async function deletePersistedAccount(username: string) {
   if (accountsPool) {
     try {
       await accountsPool.query('DELETE FROM olympia_accounts WHERE username = $1', [username]);
-      return;
     } catch (err) {
-      console.warn('Lỗi xóa tài khoản khỏi PostgreSQL, fallback local:', err);
+      console.warn('Lỗi xóa tài khoản khỏi PostgreSQL:', err);
     }
   }
 
@@ -128,6 +126,9 @@ function fixDatabaseUrl(urlStr: string): string {
 }
 
 async function initializeAccountStore() {
+  // Always load local JSON accounts first
+  loadAccountsLocally();
+
   const rawDatabaseUrl = process.env.DATABASE_URL?.trim();
 
   if (rawDatabaseUrl) {
@@ -146,6 +147,22 @@ async function initializeAccountStore() {
           created_at BIGINT NOT NULL
         )
       `);
+
+      // Sync any local accounts into PostgreSQL
+      for (const account of accounts.values()) {
+        try {
+          await accountsPool.query(
+            `INSERT INTO olympia_accounts (username, role, password_hash, created_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (username) DO NOTHING`,
+            [account.username, account.role, account.passwordHash, account.createdAt]
+          );
+        } catch (e) {
+          // ignore sync warning
+        }
+      }
+
+      // Fetch all accounts from PostgreSQL
       const result = await accountsPool.query<{
         username: string;
         role: AccountRole;
@@ -162,16 +179,15 @@ async function initializeAccountStore() {
         });
       }
       console.log(`Đã tải ${accounts.size} tài khoản từ PostgreSQL.`);
+      saveAccountsLocally();
     } catch (err) {
-      console.warn('Không thể kết nối PostgreSQL, tự động chuyển sang lưu trữ local:', err);
+      console.warn('Không thể kết nối PostgreSQL, dùng lưu trữ local:', err);
       if (accountsPool) {
         accountsPool.end().catch(() => {});
       }
       accountsPool = null;
-      loadAccountsLocally();
     }
   } else {
-    loadAccountsLocally();
     console.warn('DATABASE_URL chưa được cấu hình; tài khoản đang dùng file local.');
   }
 
