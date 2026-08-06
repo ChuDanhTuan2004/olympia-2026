@@ -152,7 +152,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5 stroke-[1.75]" />
-                  <span>MC lần lượt mở các hàng ngang. Mọi thí sinh cùng trả lời để tích lũy điểm hàng ngang.</span>
+                  <span>Các thí sinh lần lượt chọn hàng ngang. Mọi thí sinh cùng trả lời để tích lũy điểm.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5 stroke-[1.75]" />

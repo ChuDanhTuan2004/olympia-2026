@@ -426,7 +426,7 @@ async function generateGeminiQuestions(topicCustom?: string): Promise<OlympiaQue
 Nhiệm vụ của bạn là soạn bộ câu hỏi chính xác, chuẩn xác kiến thức, hấp dẫn và công bằng cho 1 trận thi đấu giữa 4 thí sinh.
 
 ${cleanTopic !== '' 
-  ? `CRITICAL INSTRUCTION - YÊU CẦU TỐI CAO TỪ MC QUẢN TRÒ: Bạn BẮT BUỘC phải soạn toàn bộ câu hỏi DỰA TRÊN CHỦ ĐỀ CHỦ ĐẠO: "${cleanTopic}".
+  ? `CRITICAL INSTRUCTION - YÊU CẦU TỐI CAO TỪ CHỦ PHÒNG: Bạn BẮT BUỘC phải soạn toàn bộ câu hỏi DỰA TRÊN CHỦ ĐỀ CHỦ ĐẠO: "${cleanTopic}".
 Tất cả các phần thi (12 câu Khởi động, từ khóa + 4 hàng ngang Chướng ngại vật, 4 câu Tăng tốc, và 4 gói Về đích) BẮT BUỘC đều phải xoay quanh hoặc liên quan trực tiếp đến chủ đề "${cleanTopic}".`
   : 'Phủ rộng đa dạng các lĩnh vực: Toán, Lý, Hóa, Sinh, Sử, Địa, Văn học, Tiếng Anh, Thể thao, Nghệ thuật, Hiểu biết chung.'}
 
@@ -589,6 +589,8 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     // Ensure clues have isOpened set to false initially
     if (data.obstacle && data.obstacle.clues) {
       data.obstacle.clues.forEach((c) => {
+        c.number = Number(c.number);
+        c.letterCount = Number(c.letterCount);
         c.isOpened = false;
         c.isAnswered = false;
       });
@@ -1232,6 +1234,10 @@ wss.on('connection', (ws) => {
       let room = rooms.get(roomId);
 
       if (type === 'REJOIN_ROOM') {
+        if (role !== 'player') {
+          ws.send(JSON.stringify({ type: 'ROOM_CANCELLED', payload: { reason: 'Tài khoản admin không thể tham gia phòng thi.' } }));
+          return;
+        }
         if (!room) {
           ws.send(JSON.stringify({ type: 'ROOM_CANCELLED', payload: { reason: 'Phòng không còn tồn tại.' } }));
           return;
@@ -1253,13 +1259,27 @@ wss.on('connection', (ws) => {
       }
 
       if (type === 'CREATE_ROOM') {
-        if (role !== 'admin') {
-          ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ admin được tạo phòng.' }));
+        if (role !== 'player' || !playerId) {
+          ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ tài khoản thí sinh được tạo phòng.' }));
+          return;
+        }
+        if (room) {
+          ws.send(JSON.stringify({ type: 'ERROR', payload: 'Mã phòng này đang được sử dụng.' }));
           return;
         }
         room = createRoom(roomId, payload?.code);
-        clientRoomMap.set(ws, { roomId, role: 'admin' });
-        addRoomLog(room, 'Admin MC đã kết nối quản lý phòng thi.', 'info');
+        room.hostPlayerId = playerId;
+        room.players.push({
+          id: playerId,
+          name: payload?.name || authSession.username,
+          avatar: payload?.avatar || '🦁',
+          color: '#3b82f6',
+          score: 0,
+          isReady: true,
+          isOnline: true,
+        });
+        clientRoomMap.set(ws, { roomId, role: 'player', playerId });
+        addRoomLog(room, `${payload?.name || authSession.username} đã tạo phòng và trở thành chủ phòng.`, 'success');
         ws.send(JSON.stringify({ type: 'INIT_STATE', payload: room }));
         return;
       }
@@ -1274,6 +1294,7 @@ wss.on('connection', (ws) => {
 
       // Update socket connection map
       clientRoomMap.set(ws, { roomId, role: role || 'spectator', playerId });
+      const isRoomHost = role === 'player' && playerId === room.hostPlayerId;
 
       switch (type) {
         case 'JOIN_ROOM': {
@@ -1316,8 +1337,8 @@ wss.on('connection', (ws) => {
         }
 
         case 'GENERATE_QUESTIONS': {
-          if (role !== 'admin') {
-            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền tạo câu hỏi!' }));
+          if (!isRoomHost) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền tạo câu hỏi!' }));
             return;
           }
           const customTopic = payload?.topicCustom?.trim();
@@ -1346,8 +1367,8 @@ wss.on('connection', (ws) => {
         }
 
         case 'START_GAME': {
-          if (role !== 'admin') {
-            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền bấm Bắt đầu trận đấu!' }));
+          if (!isRoomHost) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền bắt đầu trận đấu!' }));
             return;
           }
           if (room.players.length < 1) {
@@ -1380,8 +1401,8 @@ wss.on('connection', (ws) => {
         }
 
         case 'NEXT_ROUND': {
-          if (role !== 'admin') {
-            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền chuyển vòng thi!' }));
+          if (!isRoomHost) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền chuyển vòng thi!' }));
             return;
           }
           const pendingWarmupAdvance = warmupAdvanceTimers.get(roomId);
@@ -1721,17 +1742,19 @@ wss.on('connection', (ws) => {
         }
 
         case 'OPEN_OBSTACLE_CLUE': {
-          const clueNum = payload?.clueNumber;
+          const clueNum = Number(payload?.clueNumber);
           const state = room.obstacleState;
           const currentSelectorId = state?.selectionOrder[state.selectionTurnIndex];
           if (
+            Number.isInteger(clueNum) &&
             role === 'player' &&
             playerId === currentSelectorId &&
             state?.phase === 'selecting_clue' &&
             room.questions?.obstacle
           ) {
-            const clue = room.questions.obstacle.clues.find((c) => c.number === clueNum);
+            const clue = room.questions.obstacle.clues.find((c) => Number(c.number) === clueNum);
             if (clue && !clue.isOpened) {
+              clue.number = clueNum;
               clue.isOpened = true;
               if (!state.openedClues.includes(clueNum)) {
                 state.openedClues.push(clueNum);
@@ -1840,7 +1863,12 @@ wss.on('connection', (ws) => {
         }
 
         case 'JUDGE_ANSWER': {
-          // Admin judges correct/wrong and awards points
+          if (!isRoomHost) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền chấm điểm thủ công.' }));
+            return;
+          }
+
+          // Room host judges correct/wrong and awards points
           const targetPlayerId = payload?.playerId;
           const isCorrect = payload?.isCorrect;
           const pointsDelta = payload?.points || 10;
@@ -1937,15 +1965,20 @@ wss.on('connection', (ws) => {
         }
 
         case 'UPDATE_SCORE': {
+          if (!isRoomHost) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền cập nhật điểm.' }));
+            return;
+          }
           const targetP = room.players.find((p) => p.id === payload?.playerId);
           if (targetP) {
             targetP.score = payload?.newScore ?? targetP.score;
-            addRoomLog(room, `Admin đã cập nhật điểm của ${targetP.name} thành ${targetP.score}`, 'info');
+            addRoomLog(room, `Chủ phòng đã cập nhật điểm của ${targetP.name} thành ${targetP.score}`, 'info');
           }
           break;
         }
 
         case 'START_TIMER': {
+          if (!isRoomHost) return;
           room.timerActive = true;
           if (payload?.seconds) room.timerSeconds = payload.seconds;
           addRoomLog(room, `Bắt đầu tính giờ (${room.timerSeconds}s)`, 'info');
@@ -1953,13 +1986,14 @@ wss.on('connection', (ws) => {
         }
 
         case 'PAUSE_TIMER': {
+          if (!isRoomHost) return;
           room.timerActive = false;
           addRoomLog(room, 'Tạm dừng đồng hồ.', 'info');
           break;
         }
 
         case 'CANCEL_ROOM': {
-          if (role !== 'admin') {
+          if (!isRoomHost) {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền hủy phòng!' }));
             return;
           }
@@ -1999,8 +2033,8 @@ wss.on('connection', (ws) => {
         }
 
         case 'RESET_GAME': {
-          if (role !== 'admin') {
-            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền đặt lại trận đấu!' }));
+          if (!isRoomHost) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền đặt lại trận đấu!' }));
             return;
           }
           const pendingWarmupAdvance = warmupAdvanceTimers.get(roomId);
@@ -2019,7 +2053,7 @@ wss.on('connection', (ws) => {
           room.players.forEach((p) => (p.score = 0));
           room.activeBuzzer = undefined;
           room.buzzerLocked = false;
-          addRoomLog(room, 'MC đã đặt lại trận thi đấu về phòng chờ!', 'info');
+          addRoomLog(room, 'Chủ phòng đã đặt lại trận thi đấu về phòng chờ!', 'info');
           break;
         }
       }

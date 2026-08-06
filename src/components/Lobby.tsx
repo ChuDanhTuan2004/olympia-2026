@@ -4,12 +4,13 @@ import { AccountRole, GameState, Role } from '../types';
 
 interface LobbyProps {
   room?: GameState;
-  role?: Role;
   onJoinRoom: (roomCode: string, role: Role, name?: string, avatar?: string) => void;
+  onCreateRoom: (roomCode: string, name: string, avatar: string) => void;
   onStartGame: (topic: string) => void;
   isGenerating: boolean;
   accountRole: AccountRole;
   accountUsername: string;
+  playerId?: string;
   onOpenAccountManager: () => void;
   onLogout: () => void;
 }
@@ -18,12 +19,13 @@ const AVATARS = ['🦁', '🦅', '🐉', '⚡', '🚀', '🎓', '🏆', '🔥'];
 
 export const Lobby: React.FC<LobbyProps> = ({
   room,
-  role = 'spectator',
   onJoinRoom,
+  onCreateRoom,
   onStartGame,
   isGenerating,
   accountRole,
   accountUsername,
+  playerId,
   onOpenAccountManager,
   onLogout,
 }) => {
@@ -31,7 +33,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [playerNameInput, setPlayerNameInput] = useState(accountUsername);
   const [selectedAvatar, setSelectedAvatar] = useState('🦁');
   const [customTopic, setCustomTopic] = useState('');
-  const [mode, setMode] = useState<'welcome' | 'join_player' | 'create_mc'>('welcome');
+  const [mode, setMode] = useState<'welcome' | 'join_player' | 'create_room'>('welcome');
 
   const handleJoinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,9 +41,9 @@ export const Lobby: React.FC<LobbyProps> = ({
     onJoinRoom(roomCodeInput.trim().toUpperCase(), 'player', playerNameInput.trim(), selectedAvatar);
   };
 
-  const handleCreateMC = () => {
+  const handleCreateRoom = () => {
     const code = roomCodeInput.trim() || Math.floor(1000 + Math.random() * 9000).toString();
-    onJoinRoom(code, 'admin');
+    onCreateRoom(code, playerNameInput.trim() || accountUsername, selectedAvatar);
   };
 
   if (!room) {
@@ -77,6 +79,11 @@ export const Lobby: React.FC<LobbyProps> = ({
 
           {mode === 'welcome' && (
             <div className="space-y-4">
+              {accountRole === 'admin' && (
+                <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-center text-sm font-semibold text-slate-600">
+                  Tài khoản admin chỉ dùng để quản lý tài khoản và không thể tham gia thi đấu.
+                </div>
+              )}
               {accountRole === 'player' && (
                 <button
                   onClick={() => setMode('join_player')}
@@ -86,9 +93,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                 </button>
               )}
 
-              {accountRole === 'admin' && (
+              {accountRole === 'player' && (
                 <button
-                  onClick={() => setMode('create_mc')}
+                  onClick={() => setMode('create_room')}
                   className="w-full py-4 px-6 rounded-2xl bg-stone-100 hover:bg-stone-200/80 border border-stone-200/80 text-slate-700 font-bold text-base flex items-center justify-center gap-3 shadow-sm transition-all"
                 >
                   <Shield className="w-5 h-5 text-teal-600 stroke-[1.75]" /> TẠO PHÒNG MỚI
@@ -161,7 +168,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             </form>
           )}
 
-          {mode === 'create_mc' && (
+          {mode === 'create_room' && (
             <div className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-2">Tạo mã phòng tùy chỉnh</label>
@@ -185,7 +192,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleCreateMC}
+                  onClick={handleCreateRoom}
                   className="w-1/2 py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-sm shadow-md shadow-teal-600/20 flex items-center justify-center gap-2"
                 >
                   <Shield className="w-4 h-4 stroke-[1.75]" /> BẮT ĐẦU
@@ -261,8 +268,8 @@ export const Lobby: React.FC<LobbyProps> = ({
           })}
         </div>
 
-        {/* Gemini Questions Generator & MC Controls */}
-        {role === 'admin' ? (
+        {/* Question setup controls for the player who created the room */}
+        {room.hostPlayerId === playerId ? (
           <div className="space-y-5 bg-stone-100/70 border border-stone-200/80 rounded-2xl p-6">
             <div className="flex items-center gap-2 text-teal-800 font-bold text-sm">
               <Sparkles className="w-4 h-4 text-teal-600 stroke-[1.75]" /> CẤU HÌNH BỘ CÂU HỎI

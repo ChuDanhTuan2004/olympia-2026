@@ -65,7 +65,7 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
   if (!q) {
     return (
       <div className="text-center py-12 text-slate-400">
-        Chưa có câu hỏi Khởi động. MC vui lòng chọn chủ đề để Gemini AI soạn câu hỏi.
+        Chưa có câu hỏi Khởi động. Chủ phòng vui lòng chọn chủ đề để Gemini AI soạn câu hỏi.
       </div>
     );
   }

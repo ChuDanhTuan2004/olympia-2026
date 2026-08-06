@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState } from '../types';
-import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw, UserCog } from 'lucide-react';
+import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw } from 'lucide-react';
 
 interface AdminControlDrawerProps {
   room: GameState;
@@ -9,7 +9,6 @@ interface AdminControlDrawerProps {
   onPauseTimer: () => void;
   onUpdateScore: (playerId: string, newScore: number) => void;
   onResetGame: () => void;
-  onOpenAccountManager: () => void;
 }
 
 export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
@@ -19,7 +18,6 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
   onPauseTimer,
   onUpdateScore,
   onResetGame,
-  onOpenAccountManager,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(room.players[0]?.id || '');
@@ -40,13 +38,13 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
           onClick={() => setIsOpen(true)}
           className="py-3 px-5 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-full shadow-2xl shadow-teal-600/30 flex items-center gap-2 border border-teal-500 transition-all transform hover:scale-105"
         >
-          <ShieldAlert className="w-5 h-5 stroke-[1.75]" /> BẢNG MC QUẢN TRÒ
+          <ShieldAlert className="w-5 h-5 stroke-[1.75]" /> BẢNG CHỦ PHÒNG
         </button>
       ) : (
         <div className="w-80 sm:w-96 bg-white/90 border border-stone-200/80 rounded-3xl p-5 shadow-2xl shadow-stone-300/80 backdrop-blur-xl text-slate-800 space-y-4 max-h-[85vh] overflow-y-auto">
           <div className="flex items-center justify-between border-b border-stone-200/80 pb-3">
             <div className="flex items-center gap-2 font-bold text-teal-800 text-sm">
-              <ShieldAlert className="w-4 h-4 text-teal-600 stroke-[1.75]" /> BẢNG BÀN PHÍM MC
+              <ShieldAlert className="w-4 h-4 text-teal-600 stroke-[1.75]" /> ĐIỀU KHIỂN CHỦ PHÒNG
             </div>
             <button
               onClick={() => setIsOpen(false)}
@@ -163,13 +161,6 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
               ))}
             </div>
           </div>
-
-          <button
-            onClick={onOpenAccountManager}
-            className="w-full py-2.5 bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-slate-700 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
-          >
-            <UserCog className="w-3.5 h-3.5 stroke-[1.75]" /> QUẢN LÝ TÀI KHOẢN
-          </button>
 
           <button
             onClick={onResetGame}

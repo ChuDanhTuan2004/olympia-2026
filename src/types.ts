@@ -102,6 +102,7 @@ export interface ActiveBuzzer {
 export interface GameState {
   roomId: string;
   roomCode: string;
+  hostPlayerId?: string;
   status: 'waiting' | 'ready' | 'playing' | 'ended';
   currentRound: RoundType;
   currentQuestionIndex: number;

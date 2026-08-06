@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bell, CheckCircle2, KeyRound, LockKeyhole, Send, Shield, Unlock } from 'lucide-react';
 import { GameState, Role } from '../types';
 import { sounds } from '../lib/audio';
@@ -26,9 +26,10 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
   const state = room.obstacleState;
   const [clueAnswer, setClueAnswer] = useState('');
   const [keywordGuess, setKeywordGuess] = useState('');
+  const currentClueRef = useRef<HTMLElement>(null);
 
   const currentClue = obstacle?.clues.find(
-    (clue) => clue.number === state?.currentClueIndex
+    (clue) => Number(clue.number) === Number(state?.currentClueIndex)
   );
   const selectorId = state?.selectionOrder?.[state.selectionTurnIndex];
   const selector = room.players.find((player) => player.id === selectorId);
@@ -46,6 +47,16 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
   useEffect(() => {
     setClueAnswer('');
   }, [state?.currentClueIndex]);
+
+  useEffect(() => {
+    if (role !== 'player' || !currentClue || state?.phase === 'selecting_clue') return;
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      currentClueRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [role, state?.currentClueIndex, state?.phase]);
 
   if (!obstacle || !state) {
     return <div className="py-12 text-center text-neutral-500">Chưa có dữ liệu Vượt chướng ngại vật.</div>;
@@ -177,6 +188,8 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
       )}
 
       {role === 'player' && currentClue && state.phase !== 'selecting_clue' && (
+        <>
+          <span ref={currentClueRef} />
         <section className="rounded-3xl border-2 border-black bg-white p-5 shadow-xl">
           <div className="mb-3 text-xs font-bold uppercase text-neutral-500">
             Hàng ngang {currentClue.number} · Tất cả thí sinh cùng trả lời
@@ -207,7 +220,8 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
               </button>
             </form>
           ) : null}
-        </section>
+          </section>
+        </>
       )}
 
       <section className="space-y-3 rounded-3xl border border-neutral-200 bg-white p-6 shadow-lg">

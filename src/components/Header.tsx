@@ -1,18 +1,18 @@
 import React from 'react';
 import { Award, Volume2, VolumeX, Wifi, ShieldAlert, Sparkles, Copy, Check, BookOpen, Trash2 } from 'lucide-react';
-import { GameState, Role } from '../types';
+import { GameState } from '../types';
 import { sounds } from '../lib/audio';
 
 interface HeaderProps {
   room: GameState;
-  role: Role;
+  isHost: boolean;
   playerId?: string;
   isConnected: boolean;
   onOpenRules?: () => void;
   onCancelRoom?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ room, role, playerId, isConnected, onOpenRules, onCancelRoom }) => {
+export const Header: React.FC<HeaderProps> = ({ room, isHost, playerId, isConnected, onOpenRules, onCancelRoom }) => {
   const [isMuted, setIsMuted] = React.useState(sounds.getMuted());
   const [copied, setCopied] = React.useState(false);
 
@@ -72,9 +72,9 @@ export const Header: React.FC<HeaderProps> = ({ room, role, playerId, isConnecte
           </div>
 
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-semibold bg-neutral-800 border border-neutral-700 text-white">
-            {role === 'admin' ? (
+            {isHost ? (
               <>
-                <ShieldAlert className="w-3.5 h-3.5 text-white stroke-[1.75]" /> MC QUẢN TRÒ
+                <ShieldAlert className="w-3.5 h-3.5 text-white stroke-[1.75]" /> CHỦ PHÒNG · THÍ SINH
               </>
             ) : (
               <>
@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({ room, role, playerId, isConnecte
             )}
           </div>
 
-          {role === 'admin' && onCancelRoom && (
+          {isHost && onCancelRoom && (
             <button
               onClick={() => {
                 if (window.confirm('Hủy phòng sẽ đưa tất cả người chơi về sảnh. Bạn có chắc chắn?')) {

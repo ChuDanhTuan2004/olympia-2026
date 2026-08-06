@@ -1,15 +1,15 @@
 import React, { useEffect } from 'react';
-import { GameState, Role } from '../types';
+import { GameState } from '../types';
 import { Trophy, Award, RefreshCw, Sparkles, Star } from 'lucide-react';
 import { sounds } from '../lib/audio';
 
 interface VictoryModalProps {
   room: GameState;
-  role: Role;
+  isHost: boolean;
   onResetGame: () => void;
 }
 
-export const VictoryModal: React.FC<VictoryModalProps> = ({ room, role, onResetGame }) => {
+export const VictoryModal: React.FC<VictoryModalProps> = ({ room, isHost, onResetGame }) => {
   const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
   const winner = sortedPlayers[0];
   const runnerUp = sortedPlayers[1];
@@ -78,13 +78,14 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({ room, role, onResetG
           </div>
         </div>
 
-        {/* Restart Button for Admin or Players */}
-        <button
-          onClick={onResetGame}
-          className="w-full py-4 px-6 bg-teal-600 hover:bg-teal-700 text-white font-black text-lg rounded-2xl shadow-xl shadow-teal-600/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-        >
-          <RefreshCw className="w-5 h-5 stroke-[1.75]" /> BẮT ĐẦU TRẬN THI ĐẤU MỚI
-        </button>
+        {isHost && (
+          <button
+            onClick={onResetGame}
+            className="w-full py-4 px-6 bg-teal-600 hover:bg-teal-700 text-white font-black text-lg rounded-2xl shadow-xl shadow-teal-600/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <RefreshCw className="w-5 h-5 stroke-[1.75]" /> BẮT ĐẦU TRẬN THI ĐẤU MỚI
+          </button>
+        )}
       </div>
     </div>
   );

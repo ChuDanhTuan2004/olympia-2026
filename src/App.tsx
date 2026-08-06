@@ -19,7 +19,7 @@ const AUTH_TOKEN_STORAGE_KEY = 'olympia_auth_token';
 
 interface StoredSession {
   roomId: string;
-  role: 'admin' | 'player';
+  role: 'player';
 }
 
 export default function App() {
@@ -258,38 +258,47 @@ export default function App() {
     sendAuthenticatedMessage('DELETE_ACCOUNT', { username });
   };
 
-  // Join or Create Room handler
+  // Join an existing room as a contestant
   const handleJoinRoom = (roomCode: string, userRole: Role, name?: string, avatar?: string) => {
-    setRole(userRole);
+    if (userRole !== 'player') return;
+    setRole('player');
     const roomId = 'room_' + roomCode;
     localStorage.setItem(
       SESSION_STORAGE_KEY,
-      JSON.stringify({ roomId, role: userRole === 'admin' ? 'admin' : 'player' } satisfies StoredSession)
+      JSON.stringify({ roomId, role: 'player' } satisfies StoredSession)
     );
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      if (userRole === 'admin') {
-        wsRef.current.send(
-          JSON.stringify({
-            type: 'CREATE_ROOM',
-            roomId,
-            role: 'admin',
-            authToken: authTokenRef.current || undefined,
-            payload: { code: roomCode },
-          })
-        );
-      } else {
-        wsRef.current.send(
-          JSON.stringify({
-            type: 'JOIN_ROOM',
-            roomId,
-            role: 'player',
-            playerId,
-            authToken: authTokenRef.current || undefined,
-            payload: { name, avatar },
-          })
-        );
-      }
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'JOIN_ROOM',
+          roomId,
+          role: 'player',
+          playerId,
+          authToken: authTokenRef.current || undefined,
+          payload: { name, avatar },
+        })
+      );
+    }
+  };
+
+  const handleCreateRoom = (roomCode: string, name: string, avatar: string) => {
+    setRole('player');
+    const roomId = 'room_' + roomCode;
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ roomId, role: 'player' } satisfies StoredSession)
+    );
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'CREATE_ROOM',
+        roomId,
+        role: 'player',
+        playerId,
+        authToken: authTokenRef.current || undefined,
+        payload: { code: roomCode, name, avatar },
+      }));
     }
   };
 
@@ -425,12 +434,13 @@ export default function App() {
       {!room || room.status === 'waiting' ? (
         <Lobby
           room={room || undefined}
-          role={role}
           onJoinRoom={handleJoinRoom}
+          onCreateRoom={handleCreateRoom}
           onStartGame={handleStartGame}
           isGenerating={isGenerating}
           accountRole={authUser.role}
           accountUsername={authUser.username}
+          playerId={playerId}
           onOpenAccountManager={handleOpenAccountManager}
           onLogout={handleLogout}
         />
@@ -438,7 +448,7 @@ export default function App() {
         <>
           <Header
             room={room}
-            role={role}
+            isHost={room.hostPlayerId === playerId}
             playerId={playerId}
             isConnected={isConnected}
             onOpenRules={() => setShowRulesModal(true)}
@@ -494,11 +504,11 @@ export default function App() {
 
           {/* Victory Modal on Summary / Game End */}
           {(room.status === 'ended' || room.currentRound === 'summary') && (
-            <VictoryModal room={room} role={role} onResetGame={handleResetGame} />
+            <VictoryModal room={room} isHost={room.hostPlayerId === playerId} onResetGame={handleResetGame} />
           )}
 
-          {/* MC Admin Quick Toolbar */}
-          {role === 'admin' && (
+          {/* Quick controls for the contestant who created the room */}
+          {role === 'player' && room.hostPlayerId === playerId && (
             <AdminControlDrawer
               room={room}
               onNextRound={handleNextRound}
@@ -506,7 +516,6 @@ export default function App() {
               onPauseTimer={handlePauseTimer}
               onUpdateScore={handleUpdateScore}
               onResetGame={handleResetGame}
-              onOpenAccountManager={handleOpenAccountManager}
             />
           )}
         </>
