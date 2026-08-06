@@ -98,35 +98,43 @@ async function initializeAccountStore() {
   const databaseUrl = process.env.DATABASE_URL?.trim();
 
   if (databaseUrl) {
-    const usesLocalDatabase = /localhost|127\.0\.0\.1/.test(databaseUrl);
-    accountsPool = new Pool({
-      connectionString: databaseUrl,
-      ssl: usesLocalDatabase ? undefined : { rejectUnauthorized: false },
-    });
-    await accountsPool.query(`
-      CREATE TABLE IF NOT EXISTS olympia_accounts (
-        username TEXT PRIMARY KEY,
-        role TEXT NOT NULL CHECK (role IN ('admin', 'player')),
-        password_hash TEXT NOT NULL,
-        created_at BIGINT NOT NULL
-      )
-    `);
-    const result = await accountsPool.query<{
-      username: string;
-      role: AccountRole;
-      password_hash: string;
-      created_at: string;
-    }>('SELECT username, role, password_hash, created_at FROM olympia_accounts');
-
-    for (const row of result.rows) {
-      accounts.set(row.username.toLowerCase(), {
-        username: row.username,
-        role: row.role,
-        passwordHash: row.password_hash,
-        createdAt: Number(row.created_at),
+    try {
+      const usesLocalDatabase = /localhost|127\.0\.0\.1/.test(databaseUrl);
+      accountsPool = new Pool({
+        connectionString: databaseUrl,
+        ssl: usesLocalDatabase ? undefined : { rejectUnauthorized: false },
       });
+      await accountsPool.query(`
+        CREATE TABLE IF NOT EXISTS olympia_accounts (
+          username TEXT PRIMARY KEY,
+          role TEXT NOT NULL CHECK (role IN ('admin', 'player')),
+          password_hash TEXT NOT NULL,
+          created_at BIGINT NOT NULL
+        )
+      `);
+      const result = await accountsPool.query<{
+        username: string;
+        role: AccountRole;
+        password_hash: string;
+        created_at: string;
+      }>('SELECT username, role, password_hash, created_at FROM olympia_accounts');
+
+      for (const row of result.rows) {
+        accounts.set(row.username.toLowerCase(), {
+          username: row.username,
+          role: row.role,
+          passwordHash: row.password_hash,
+          createdAt: Number(row.created_at),
+        });
+      }
+      console.log(`Đã tải ${accounts.size} tài khoản từ PostgreSQL.`);
+    } catch (err) {
+      console.error('Lỗi kết nối PostgreSQL (DATABASE_URL):', err);
+      console.warn('Lưu ý: Ký tự đặc biệt trong mật khẩu (như ?, #, @, ...) cần được Encode URL (ví dụ: ? thành %3F, # thành %23).');
+      console.warn('Tạm thời chuyển sang bộ lưu trữ tài khoản local JSON.');
+      accountsPool = null;
+      loadAccountsLocally();
     }
-    console.log(`Đã tải ${accounts.size} tài khoản từ PostgreSQL.`);
   } else {
     loadAccountsLocally();
     console.warn('DATABASE_URL chưa được cấu hình; tài khoản đang dùng file local và sẽ không bền vững khi redeploy.');
