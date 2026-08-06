@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState, Role, FinishQuestion } from '../types';
-import { Star, Bell, Shield, CheckCircle2, XCircle, ChevronRight, HelpCircle, SkipForward, Users } from 'lucide-react';
+import { Star, Bell, Shield, CheckCircle2, XCircle, HelpCircle, SkipForward, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
 
 interface RoundFinishProps {
@@ -11,7 +11,6 @@ interface RoundFinishProps {
   onPressBuzzer: () => void;
   onSubmitAnswer: (answer: string, actionType?: 'confirm' | 'skip') => void;
   onJudgeAnswer: (targetPlayerId: string, isCorrect: boolean, points: number, deduct?: boolean) => void;
-  onNextQuestion: () => void;
 }
 
 export const RoundFinish: React.FC<RoundFinishProps> = ({
@@ -22,7 +21,6 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
   onPressBuzzer,
   onSubmitAnswer,
   onJudgeAnswer,
-  onNextQuestion,
 }) => {
   const finishState = room.finishState;
   const activeTurnPlayer = room.players.find((p) => p.id === finishState?.activeTurnPlayerId) || room.players[0];
@@ -387,15 +385,6 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
               })}
             </div>
 
-            {/* Next Question Control */}
-            <div className="flex justify-end">
-              <button
-                onClick={onNextQuestion}
-                className="py-3 px-6 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-xs flex items-center gap-2 transition-all shadow-md shadow-teal-600/20"
-              >
-                CÂU HỎI TIẾP THEO <ChevronRight className="w-4 h-4 stroke-[1.75]" />
-              </button>
-            </div>
           </div>
         )}
       </div>

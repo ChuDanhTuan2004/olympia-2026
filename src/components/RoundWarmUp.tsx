@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameState, Role } from '../types';
-import { Ban, Bell, CheckCircle2, ChevronRight, Clock, HelpCircle, Shield, SkipForward, Users } from 'lucide-react';
+import { Ban, Bell, CheckCircle2, Clock, HelpCircle, Shield, SkipForward, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
 
 interface RoundWarmUpProps {
@@ -10,7 +10,6 @@ interface RoundWarmUpProps {
   onPressBuzzer: () => void;
   onSubmitAnswer?: (answer: string, actionType?: 'confirm' | 'skip') => void;
   onJudgeAnswer: (targetPlayerId: string, isCorrect: boolean, points: number, nextQuestion?: boolean) => void;
-  onNextQuestion: () => void;
 }
 
 export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
@@ -19,7 +18,6 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
   playerId,
   onPressBuzzer,
   onSubmitAnswer,
-  onNextQuestion,
 }) => {
   const warmupQuestions = room.questions?.warmup || [];
   const currentIdx = room.currentQuestionIndex;
@@ -269,15 +267,6 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
               })}
             </div>
 
-            {/* Next Question Control */}
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={onNextQuestion}
-                className="py-3 px-6 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl text-xs flex items-center gap-2 transition-all shadow-md shadow-teal-600/20"
-              >
-                CÂU HỎI TIẾP THEO <ChevronRight className="w-4 h-4 stroke-[1.75]" />
-              </button>
-            </div>
           </div>
         )}
       </div>

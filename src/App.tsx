@@ -455,7 +455,6 @@ export default function App() {
                 onPressBuzzer={handlePressBuzzer}
                 onSubmitAnswer={handleSubmitAnswer}
                 onJudgeAnswer={(targetPId, isCorrect, pts) => handleJudgeAnswer(targetPId, isCorrect, pts)}
-                onNextQuestion={() => sendMessage('JUDGE_ANSWER', { nextQuestion: true })}
               />
             )}
 
@@ -478,7 +477,6 @@ export default function App() {
                 playerId={playerId}
                 onSubmitAnswer={handleSubmitAnswer}
                 onJudgeAnswer={(targetPId, isCorrect, pts) => handleJudgeAnswer(targetPId, isCorrect, pts)}
-                onNextQuestion={() => sendMessage('JUDGE_ANSWER', { nextQuestion: true })}
               />
             )}
 
@@ -491,7 +489,6 @@ export default function App() {
                 onPressBuzzer={handlePressBuzzer}
                 onSubmitAnswer={handleSubmitAnswer}
                 onJudgeAnswer={(targetPId, isCorrect, pts, deduct) => handleJudgeAnswer(targetPId, isCorrect, pts, deduct)}
-                onNextQuestion={() => sendMessage('JUDGE_ANSWER', { nextQuestion: true })}
               />
             )}
           </main>

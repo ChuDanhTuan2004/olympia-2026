@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState, Role } from '../types';
-import { Zap, Clock, Shield, CheckCircle2, ChevronRight, HelpCircle, SkipForward, Users } from 'lucide-react';
+import { Zap, Clock, Shield, CheckCircle2, HelpCircle, SkipForward, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
 
 interface RoundAccelerationProps {
@@ -9,7 +9,6 @@ interface RoundAccelerationProps {
   playerId?: string;
   onSubmitAnswer: (answer: string, actionType?: 'confirm' | 'skip') => void;
   onJudgeAnswer: (targetPlayerId: string, isCorrect: boolean, points: number, nextQuestion?: boolean) => void;
-  onNextQuestion: () => void;
 }
 
 export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
@@ -18,7 +17,6 @@ export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
   playerId,
   onSubmitAnswer,
   onJudgeAnswer,
-  onNextQuestion,
 }) => {
   const accelQuestions = room.questions?.acceleration || [];
   const currentIdx = room.currentQuestionIndex % (accelQuestions.length || 1);
@@ -196,21 +194,6 @@ export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
           </div>
         )}
 
-        {/* MC Next Question */}
-        {role === 'admin' && (
-          <div className="flex justify-end mt-6">
-            <button
-              onClick={() => {
-                setHasSubmitted(false);
-                setAnswerInput('');
-                onNextQuestion();
-              }}
-              className="py-2.5 px-5 bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-teal-800 font-bold rounded-2xl text-xs flex items-center gap-2 shadow-sm"
-            >
-              CÂU HỎI TĂNG TỐC TIẾP THEO <ChevronRight className="w-4 h-4 stroke-[1.75]" />
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

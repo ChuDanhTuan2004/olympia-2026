@@ -99,6 +99,7 @@ app.use(express.json({ limit: '10mb' }));
 const rooms = new Map<string, GameState>();
 const accelerationAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const warmupAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const finishAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // Map WebSocket connections to { roomId, role, playerId }
 const clientRoomMap = new Map<WebSocket, { roomId: string; role: string; playerId?: string }>();
 
@@ -526,6 +527,67 @@ function advanceWarmupQuestion(roomId: string, room: GameState) {
   broadcastRoomState(roomId);
 }
 
+function advanceFinishQuestion(roomId: string, room: GameState) {
+  if (!room.finishState) return;
+
+  room.currentQuestionIndex += 1;
+  room.finishState.questionIndex += 1;
+  room.finishState.mainPlayerAnswer = undefined;
+  room.finishState.stealerAnswer = undefined;
+  room.finishState.stealerPlayerId = undefined;
+  room.finishState.starOfHopeActive = false;
+  room.activeBuzzer = undefined;
+  room.buzzerLocked = false;
+
+  if (room.finishState.questionIndex >= 3) {
+    const currentTurnIndex = room.players.findIndex(
+      (player) => player.id === room.finishState?.activeTurnPlayerId
+    );
+    const nextTurnIndex = currentTurnIndex + 1;
+
+    if (nextTurnIndex < room.players.length) {
+      room.finishState.activeTurnPlayerId = room.players[nextTurnIndex].id;
+      room.finishState.questionIndex = 0;
+      room.finishState.turnPhase = 'question_active';
+      room.timerSeconds = 40;
+      room.timerActive = true;
+      addRoomLog(room, `Đến lượt thi Về đích của ${room.players[nextTurnIndex].name}.`, 'info');
+    } else {
+      room.currentRound = 'summary';
+      room.status = 'ended';
+      room.timerSeconds = 0;
+      room.timerActive = false;
+      addRoomLog(room, 'Tất cả thí sinh đã hoàn thành phần thi Về đích!', 'success');
+    }
+  } else {
+    room.finishState.turnPhase = 'question_active';
+    room.timerSeconds = 40;
+    room.timerActive = true;
+  }
+
+  broadcastRoomState(roomId);
+}
+
+function scheduleFinishAdvance(roomId: string, room: GameState) {
+  if (!room.finishState || finishAdvanceTimers.has(roomId)) return;
+  const questionIndex = room.finishState.questionIndex;
+  const activePlayerId = room.finishState.activeTurnPlayerId;
+  room.timerActive = false;
+
+  const timer = setTimeout(() => {
+    finishAdvanceTimers.delete(roomId);
+    const activeRoom = rooms.get(roomId);
+    if (
+      activeRoom?.currentRound === 'finish' &&
+      activeRoom.finishState?.questionIndex === questionIndex &&
+      activeRoom.finishState.activeTurnPlayerId === activePlayerId
+    ) {
+      advanceFinishQuestion(roomId, activeRoom);
+    }
+  }, 1000);
+  finishAdvanceTimers.set(roomId, timer);
+}
+
 // Global room timer ticker
 setInterval(() => {
   for (const [roomId, room] of rooms.entries()) {
@@ -561,6 +623,52 @@ setInterval(() => {
             revealWarmupAnswer(room, 'no_buzzer');
           }
 
+          broadcastRoomState(roomId);
+          continue;
+        }
+
+        if (room.currentRound === 'acceleration' && room.accelerationState) {
+          room.timerActive = false;
+          const completedQuestionIndex = room.currentQuestionIndex;
+          const questions = room.questions?.acceleration || [];
+          addRoomLog(room, `Hết giờ câu Tăng tốc ${completedQuestionIndex + 1}.`, 'warning');
+
+          if (
+            completedQuestionIndex < questions.length - 1 &&
+            !accelerationAdvanceTimers.has(roomId)
+          ) {
+            const advanceTimer = setTimeout(() => {
+              accelerationAdvanceTimers.delete(roomId);
+              const activeRoom = rooms.get(roomId);
+              if (
+                activeRoom?.currentRound === 'acceleration' &&
+                activeRoom.currentQuestionIndex === completedQuestionIndex &&
+                activeRoom.accelerationState
+              ) {
+                activeRoom.currentQuestionIndex += 1;
+                activeRoom.accelerationState.currentQuestionIndex = activeRoom.currentQuestionIndex;
+                activeRoom.accelerationState.playerSubmissions = [];
+                activeRoom.timerSeconds = 30;
+                activeRoom.timerActive = true;
+                broadcastRoomState(roomId);
+              }
+            }, 1000);
+            accelerationAdvanceTimers.set(roomId, advanceTimer);
+          }
+
+          broadcastRoomState(roomId);
+          continue;
+        }
+
+        if (room.currentRound === 'finish' && room.finishState) {
+          const timedOutPlayerId = room.activeBuzzer?.playerId || room.finishState.activeTurnPlayerId;
+          const timedOutPlayer = room.players.find((player) => player.id === timedOutPlayerId);
+          if (timedOutPlayer) recordAnswerResult(timedOutPlayer, false, 0);
+          room.finishState.turnPhase = 'completed';
+          room.activeBuzzer = undefined;
+          room.buzzerLocked = true;
+          addRoomLog(room, 'Hết giờ câu Về đích. Hệ thống tự động chuyển câu.', 'warning');
+          scheduleFinishAdvance(roomId, room);
           broadcastRoomState(roomId);
           continue;
         }
@@ -871,6 +979,11 @@ wss.on('connection', (ws) => {
             clearTimeout(pendingWarmupAdvance);
             warmupAdvanceTimers.delete(roomId);
           }
+          const pendingFinishAdvance = finishAdvanceTimers.get(roomId);
+          if (pendingFinishAdvance) {
+            clearTimeout(pendingFinishAdvance);
+            finishAdvanceTimers.delete(roomId);
+          }
           const nextRoundMap: Record<RoundType, RoundType> = {
             warmup: 'obstacle',
             obstacle: 'acceleration',
@@ -1162,6 +1275,7 @@ wss.on('connection', (ws) => {
                   recordAnswerResult(player, true, pts);
                   addRoomLog(room, `🎉 CHÍNH XÁC! ${player.name} trả lời ĐÚNG câu Về đích ("${answerText}")${starActive ? ' (CÓ NGÔI SAO HY VỌNG!)' : ''}! (+${pts}đ)`, 'success');
                   room.finishState.turnPhase = 'completed';
+                  scheduleFinishAdvance(roomId, room);
                 } else {
                   const deduct = starActive ? basePoints : 0;
                   if (deduct > 0) {
@@ -1197,6 +1311,7 @@ wss.on('connection', (ws) => {
               room.activeBuzzer = undefined;
               room.buzzerLocked = false;
               room.finishState.turnPhase = 'completed';
+              scheduleFinishAdvance(roomId, room);
             }
           }
           break;
@@ -1305,6 +1420,11 @@ wss.on('connection', (ws) => {
               clearTimeout(pendingAccelerationAdvance);
               accelerationAdvanceTimers.delete(roomId);
             }
+            const pendingFinishAdvance = finishAdvanceTimers.get(roomId);
+            if (pendingFinishAdvance) {
+              clearTimeout(pendingFinishAdvance);
+              finishAdvanceTimers.delete(roomId);
+            }
 
             room.currentQuestionIndex += 1;
 
@@ -1388,6 +1508,11 @@ wss.on('connection', (ws) => {
             clearTimeout(pendingWarmupAdvance);
             warmupAdvanceTimers.delete(roomId);
           }
+          const pendingFinishAdvance = finishAdvanceTimers.get(roomId);
+          if (pendingFinishAdvance) {
+            clearTimeout(pendingFinishAdvance);
+            finishAdvanceTimers.delete(roomId);
+          }
 
           const cancelledMessage = JSON.stringify({
             type: 'ROOM_CANCELLED',
@@ -1416,6 +1541,11 @@ wss.on('connection', (ws) => {
           if (pendingWarmupAdvance) {
             clearTimeout(pendingWarmupAdvance);
             warmupAdvanceTimers.delete(roomId);
+          }
+          const pendingFinishAdvance = finishAdvanceTimers.get(roomId);
+          if (pendingFinishAdvance) {
+            clearTimeout(pendingFinishAdvance);
+            finishAdvanceTimers.delete(roomId);
           }
           room.status = 'waiting';
           room.currentRound = 'warmup';
