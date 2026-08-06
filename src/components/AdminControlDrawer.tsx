@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState } from '../types';
-import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw, Trash2, UserCog } from 'lucide-react';
+import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw, UserCog } from 'lucide-react';
 
 interface AdminControlDrawerProps {
   room: GameState;
@@ -9,7 +9,6 @@ interface AdminControlDrawerProps {
   onPauseTimer: () => void;
   onUpdateScore: (playerId: string, newScore: number) => void;
   onResetGame: () => void;
-  onCancelRoom: () => void;
   onOpenAccountManager: () => void;
 }
 
@@ -20,7 +19,6 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
   onPauseTimer,
   onUpdateScore,
   onResetGame,
-  onCancelRoom,
   onOpenAccountManager,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -180,16 +178,6 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
             <RotateCcw className="w-3.5 h-3.5 stroke-[1.75]" /> ĐẶT LẠI TRẬN THI ĐẤU
           </button>
 
-          <button
-            onClick={() => {
-              if (window.confirm('Hủy phòng sẽ đưa tất cả người chơi về sảnh. Bạn có chắc chắn?')) {
-                onCancelRoom();
-              }
-            }}
-            className="w-full py-2.5 bg-red-600 hover:bg-red-700 border border-red-700 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
-          >
-            <Trash2 className="w-3.5 h-3.5 stroke-[1.75]" /> HỦY PHÒNG
-          </button>
         </div>
       )}
     </div>

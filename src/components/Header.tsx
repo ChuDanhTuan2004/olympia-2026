@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Volume2, VolumeX, Wifi, ShieldAlert, Sparkles, Copy, Check, BookOpen } from 'lucide-react';
+import { Award, Volume2, VolumeX, Wifi, ShieldAlert, Sparkles, Copy, Check, BookOpen, Trash2 } from 'lucide-react';
 import { GameState, Role } from '../types';
 import { sounds } from '../lib/audio';
 
@@ -9,9 +9,10 @@ interface HeaderProps {
   playerId?: string;
   isConnected: boolean;
   onOpenRules?: () => void;
+  onCancelRoom?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ room, role, playerId, isConnected, onOpenRules }) => {
+export const Header: React.FC<HeaderProps> = ({ room, role, playerId, isConnected, onOpenRules, onCancelRoom }) => {
   const [isMuted, setIsMuted] = React.useState(sounds.getMuted());
   const [copied, setCopied] = React.useState(false);
 
@@ -81,6 +82,21 @@ export const Header: React.FC<HeaderProps> = ({ room, role, playerId, isConnecte
               </>
             )}
           </div>
+
+          {role === 'admin' && onCancelRoom && (
+            <button
+              onClick={() => {
+                if (window.confirm('Hủy phòng sẽ đưa tất cả người chơi về sảnh. Bạn có chắc chắn?')) {
+                  onCancelRoom();
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-2xl border border-red-800 bg-red-950 px-3 py-2 text-xs font-bold text-red-300 transition-colors hover:bg-red-900 hover:text-white"
+              title="Hủy phòng"
+            >
+              <Trash2 className="h-4 w-4 stroke-[1.75]" />
+              <span className="hidden md:inline">HỦY PHÒNG</span>
+            </button>
+          )}
 
           <button
             onClick={handleToggleMute}

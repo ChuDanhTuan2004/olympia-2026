@@ -443,6 +443,7 @@ export default function App() {
             playerId={playerId}
             isConnected={isConnected}
             onOpenRules={() => setShowRulesModal(true)}
+            onCancelRoom={handleCancelRoom}
           />
 
           <main className="px-4 py-6">
@@ -509,7 +510,6 @@ export default function App() {
               onPauseTimer={handlePauseTimer}
               onUpdateScore={handleUpdateScore}
               onResetGame={handleResetGame}
-              onCancelRoom={handleCancelRoom}
               onOpenAccountManager={handleOpenAccountManager}
             />
           )}
