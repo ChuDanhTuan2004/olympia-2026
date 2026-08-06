@@ -165,7 +165,7 @@ export default function App() {
             )?.lastAnswerResult?.timestamp;
           }
           setRoom(nextRoom);
-          setIsGenerating(Boolean(nextRoom.isGeneratingQuestions));
+          setIsGenerating(false);
         } else if (msg.type === 'ROOM_CANCELLED') {
           localStorage.removeItem(SESSION_STORAGE_KEY);
           setRoom(null);
@@ -293,9 +293,13 @@ export default function App() {
     }
   };
 
-  const handleStartGame = (topic: string) => {
+  const handleGenerateQuestions = (topic?: string) => {
     setIsGenerating(true);
-    sendMessage('START_GAME', { topicCustom: topic });
+    sendMessage('GENERATE_QUESTIONS', { topicCustom: topic });
+  };
+
+  const handleStartGame = () => {
+    sendMessage('START_GAME');
   };
 
   const handleNextRound = (targetRound?: string) => {
@@ -423,6 +427,7 @@ export default function App() {
           room={room || undefined}
           role={role}
           onJoinRoom={handleJoinRoom}
+          onGenerateQuestions={handleGenerateQuestions}
           onStartGame={handleStartGame}
           isGenerating={isGenerating}
           accountRole={authUser.role}

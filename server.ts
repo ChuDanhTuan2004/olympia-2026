@@ -155,15 +155,18 @@ async function initializeAccountStore() {
 
 const authSessions = new Map<string, AuthSession>();
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Initialize Gemini Client helper
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
     },
-  },
-});
+  });
+}
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -286,7 +289,8 @@ function getDefaultQuestions(): OlympiaQuestions {
 async function generateGeminiQuestions(topicCustom?: string): Promise<OlympiaQuestions> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY chưa được cấu hình.');
+    console.warn('GEMINI_API_KEY missing, using high-quality default Olympia questions dataset.');
+    return getDefaultQuestions();
   }
 
   const cleanTopic = topicCustom ? topicCustom.trim() : '';
@@ -320,6 +324,7 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     : 'Hãy tạo trọn bộ câu hỏi Đường lên đỉnh Olympia hoàn chỉnh phủ rộng đa dạng các lĩnh vực.';
 
   try {
+    const ai = getGeminiClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: userPrompt,
@@ -463,7 +468,7 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     return data;
   } catch (error) {
     console.error('Error generating questions with Gemini:', error);
-    throw error;
+    return getDefaultQuestions();
   }
 }
 
@@ -1061,33 +1066,11 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Cần ít nhất 1 thí sinh để bắt đầu!' }));
             return;
           }
-          const customTopic = String(payload?.topicCustom || '').trim();
-          if (!customTopic) {
-            ws.send(JSON.stringify({ type: 'ERROR', payload: 'MC cần nhập chủ đề trước khi bắt đầu.' }));
-            return;
-          }
-
-          room.isGeneratingQuestions = true;
-          room.timerActive = false;
-          addRoomLog(room, `Gemini đang soạn bộ câu hỏi theo chủ đề: "${customTopic}"...`, 'info');
-          broadcastRoomState(roomId);
-
-          try {
-            room.questions = await generateGeminiQuestions(customTopic);
-          } catch (error) {
-            room.isGeneratingQuestions = false;
-            const message = error instanceof Error ? error.message : 'Không thể tạo câu hỏi bằng Gemini.';
-            ws.send(JSON.stringify({ type: 'ERROR', payload: message }));
-            broadcastRoomState(roomId);
-            return;
-          }
-
-          room.isGeneratingQuestions = false;
           room.status = 'playing';
           room.currentRound = 'warmup';
           room.currentQuestionIndex = 0;
           resetWarmupQuestion(room);
-          addRoomLog(room, `Bộ câu hỏi chủ đề "${customTopic}" đã sẵn sàng. Bắt đầu vòng Khởi động!`, 'success');
+          addRoomLog(room, '🚀 TRẬN THI ĐẤU CHÍNH THỨC BẮT ĐẦU! VÒNG 1: KHỞI ĐỘNG', 'success');
           break;
         }
 
