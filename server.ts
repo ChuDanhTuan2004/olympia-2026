@@ -6,6 +6,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
+import { Pool } from 'pg';
 import { AccountRole, GameState, OlympiaQuestions, WSMessage, RoundType } from './src/types.js';
 
 const app = express();
@@ -27,6 +28,8 @@ interface AuthSession {
 }
 
 const accountsFilePath = path.join(process.cwd(), 'data', 'accounts.json');
+const accounts = new Map<string, AccountRecord>();
+let accountsPool: Pool | null = null;
 
 function hashPassword(password: string) {
   const salt = randomBytes(16).toString('hex');
@@ -45,16 +48,14 @@ function verifyPassword(password: string, storedHash: string) {
   }
 }
 
-function saveAccounts(accounts: Map<string, AccountRecord>) {
+function saveAccountsLocally() {
   fs.mkdirSync(path.dirname(accountsFilePath), { recursive: true });
   const temporaryPath = `${accountsFilePath}.tmp`;
   fs.writeFileSync(temporaryPath, JSON.stringify([...accounts.values()], null, 2), 'utf8');
   fs.renameSync(temporaryPath, accountsFilePath);
 }
 
-function loadAccounts() {
-  const accounts = new Map<string, AccountRecord>();
-
+function loadAccountsLocally() {
   try {
     if (fs.existsSync(accountsFilePath)) {
       const storedAccounts = JSON.parse(fs.readFileSync(accountsFilePath, 'utf8')) as AccountRecord[];
@@ -65,22 +66,85 @@ function loadAccounts() {
   } catch (error) {
     console.error('Không thể đọc dữ liệu tài khoản:', error);
   }
+}
+
+async function persistAccount(account: AccountRecord) {
+  if (accountsPool) {
+    await accountsPool.query(
+      `INSERT INTO olympia_accounts (username, role, password_hash, created_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (username) DO UPDATE SET
+         role = EXCLUDED.role,
+         password_hash = EXCLUDED.password_hash,
+         created_at = EXCLUDED.created_at`,
+      [account.username, account.role, account.passwordHash, account.createdAt]
+    );
+    return;
+  }
+
+  saveAccountsLocally();
+}
+
+async function deletePersistedAccount(username: string) {
+  if (accountsPool) {
+    await accountsPool.query('DELETE FROM olympia_accounts WHERE username = $1', [username]);
+    return;
+  }
+
+  saveAccountsLocally();
+}
+
+async function initializeAccountStore() {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+
+  if (databaseUrl) {
+    const usesLocalDatabase = /localhost|127\.0\.0\.1/.test(databaseUrl);
+    accountsPool = new Pool({
+      connectionString: databaseUrl,
+      ssl: usesLocalDatabase ? undefined : { rejectUnauthorized: false },
+    });
+    await accountsPool.query(`
+      CREATE TABLE IF NOT EXISTS olympia_accounts (
+        username TEXT PRIMARY KEY,
+        role TEXT NOT NULL CHECK (role IN ('admin', 'player')),
+        password_hash TEXT NOT NULL,
+        created_at BIGINT NOT NULL
+      )
+    `);
+    const result = await accountsPool.query<{
+      username: string;
+      role: AccountRole;
+      password_hash: string;
+      created_at: string;
+    }>('SELECT username, role, password_hash, created_at FROM olympia_accounts');
+
+    for (const row of result.rows) {
+      accounts.set(row.username.toLowerCase(), {
+        username: row.username,
+        role: row.role,
+        passwordHash: row.password_hash,
+        createdAt: Number(row.created_at),
+      });
+    }
+    console.log(`Đã tải ${accounts.size} tài khoản từ PostgreSQL.`);
+  } else {
+    loadAccountsLocally();
+    console.warn('DATABASE_URL chưa được cấu hình; tài khoản đang dùng file local và sẽ không bền vững khi redeploy.');
+  }
 
   const adminAccount = accounts.get('tuancd');
   if (!adminAccount || adminAccount.role !== 'admin' || !verifyPassword('6868', adminAccount.passwordHash)) {
-    accounts.set('tuancd', {
+    const defaultAdmin: AccountRecord = {
       username: 'tuancd',
       role: 'admin',
       passwordHash: hashPassword('6868'),
       createdAt: adminAccount?.createdAt || Date.now(),
-    });
-    saveAccounts(accounts);
+    };
+    accounts.set('tuancd', defaultAdmin);
+    await persistAccount(defaultAdmin);
   }
-
-  return accounts;
 }
 
-const accounts = loadAccounts();
 const authSessions = new Map<string, AuthSession>();
 
 // Initialize Gemini Client
@@ -804,13 +868,21 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        accounts.set(username, {
+        const newAccount: AccountRecord = {
           username,
           role: 'player',
           passwordHash: hashPassword(password),
           createdAt: Date.now(),
-        });
-        saveAccounts(accounts);
+        };
+        accounts.set(username, newAccount);
+        try {
+          await persistAccount(newAccount);
+        } catch (error) {
+          accounts.delete(username);
+          console.error('Không thể lưu tài khoản:', error);
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Không thể lưu tài khoản. Vui lòng thử lại.' }));
+          return;
+        }
         ws.send(JSON.stringify({ type: 'ACCOUNT_CREATED', payload: { username } }));
         ws.send(JSON.stringify({
           type: 'ACCOUNT_LIST',
@@ -831,11 +903,17 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        try {
+          await deletePersistedAccount(username);
+        } catch (error) {
+          console.error('Không thể xóa tài khoản:', error);
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Không thể xóa tài khoản. Vui lòng thử lại.' }));
+          return;
+        }
         accounts.delete(username);
         for (const [token, session] of authSessions.entries()) {
           if (session.username === username) authSessions.delete(token);
         }
-        saveAccounts(accounts);
         ws.send(JSON.stringify({
           type: 'ACCOUNT_LIST',
           payload: [...accounts.values()].map(({ username: name, role, createdAt }) => ({ username: name, role, createdAt })),
@@ -1602,6 +1680,8 @@ wss.on('connection', (ws) => {
 });
 
 async function startServer() {
+  await initializeAccountStore();
+
   // Setup Vite dev server or static files
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -1622,4 +1702,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch((error) => {
+  console.error('Không thể khởi động server:', error);
+  process.exitCode = 1;
+});
