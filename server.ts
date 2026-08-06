@@ -74,7 +74,77 @@ function loadAccountsLocally() {
   }
 }
 
+async function getAccountByUsername(username: string): Promise<AccountRecord | undefined> {
+  const cleanUsername = username.trim().toLowerCase();
+  if (accountsPool) {
+    try {
+      const res = await accountsPool.query<{
+        username: string;
+        role: AccountRole;
+        password_hash: string;
+        created_at: string;
+      }>(
+        'SELECT username, role, password_hash, created_at FROM olympia_accounts WHERE LOWER(username) = $1',
+        [cleanUsername]
+      );
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        const acc: AccountRecord = {
+          username: row.username,
+          role: row.role,
+          passwordHash: row.password_hash,
+          createdAt: Number(row.created_at),
+        };
+        accounts.set(cleanUsername, acc);
+        return acc;
+      } else {
+        accounts.delete(cleanUsername);
+        return undefined;
+      }
+    } catch (err) {
+      console.warn('Lỗi đọc tài khoản từ PostgreSQL:', err);
+    }
+  }
+  return accounts.get(cleanUsername);
+}
+
+async function getAllAccounts(): Promise<Array<{ username: string; role: AccountRole; createdAt: number }>> {
+  if (accountsPool) {
+    try {
+      const res = await accountsPool.query<{
+        username: string;
+        role: AccountRole;
+        created_at: string;
+      }>('SELECT username, role, created_at FROM olympia_accounts ORDER BY created_at ASC');
+
+      const freshList = res.rows.map((row) => ({
+        username: row.username,
+        role: row.role,
+        createdAt: Number(row.created_at),
+      }));
+
+      for (const row of res.rows) {
+        if (!accounts.has(row.username.toLowerCase())) {
+          accounts.set(row.username.toLowerCase(), {
+            username: row.username,
+            role: row.role,
+            passwordHash: '',
+            createdAt: Number(row.created_at),
+          });
+        }
+      }
+      return freshList;
+    } catch (err) {
+      console.warn('Lỗi lấy danh sách tài khoản từ PostgreSQL:', err);
+    }
+  }
+  return [...accounts.values()].map(({ username, role, createdAt }) => ({ username, role, createdAt }));
+}
+
 async function persistAccount(account: AccountRecord) {
+  const cleanUsername = account.username.trim().toLowerCase();
+  accounts.set(cleanUsername, account);
+
   if (accountsPool) {
     try {
       await accountsPool.query(
@@ -95,9 +165,12 @@ async function persistAccount(account: AccountRecord) {
 }
 
 async function deletePersistedAccount(username: string) {
+  const cleanUsername = username.trim().toLowerCase();
+  accounts.delete(cleanUsername);
+
   if (accountsPool) {
     try {
-      await accountsPool.query('DELETE FROM olympia_accounts WHERE username = $1', [username]);
+      await accountsPool.query('DELETE FROM olympia_accounts WHERE LOWER(username) = $1', [cleanUsername]);
     } catch (err) {
       console.warn('Lỗi xóa tài khoản khỏi PostgreSQL:', err);
     }
@@ -1001,7 +1074,7 @@ wss.on('connection', (ws) => {
       if (type === 'AUTH_LOGIN') {
         const username = String(payload?.username || '').trim().toLowerCase();
         const password = String(payload?.password || '');
-        const account = accounts.get(username);
+        const account = await getAccountByUsername(username);
 
         if (!account || !verifyPassword(password, account.passwordHash)) {
           ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Tên đăng nhập hoặc mật khẩu không đúng.' }));
@@ -1067,9 +1140,10 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Chỉ admin được quản lý tài khoản.' }));
           return;
         }
+        const accountList = await getAllAccounts();
         ws.send(JSON.stringify({
           type: 'ACCOUNT_LIST',
-          payload: [...accounts.values()].map(({ username, role, createdAt }) => ({ username, role, createdAt })),
+          payload: accountList,
         }));
         return;
       }
@@ -1090,7 +1164,9 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Mật khẩu phải có ít nhất 4 ký tự.' }));
           return;
         }
-        if (accounts.has(username)) {
+
+        const existingAccount = await getAccountByUsername(username);
+        if (existingAccount) {
           ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Tên đăng nhập đã tồn tại.' }));
           return;
         }
@@ -1101,7 +1177,6 @@ wss.on('connection', (ws) => {
           passwordHash: hashPassword(password),
           createdAt: Date.now(),
         };
-        accounts.set(username, newAccount);
         try {
           await persistAccount(newAccount);
         } catch (error) {
@@ -1111,9 +1186,10 @@ wss.on('connection', (ws) => {
           return;
         }
         ws.send(JSON.stringify({ type: 'ACCOUNT_CREATED', payload: { username } }));
+        const accountList = await getAllAccounts();
         ws.send(JSON.stringify({
           type: 'ACCOUNT_LIST',
-          payload: [...accounts.values()].map(({ username, role, createdAt }) => ({ username, role, createdAt })),
+          payload: accountList,
         }));
         return;
       }
@@ -1124,7 +1200,7 @@ wss.on('connection', (ws) => {
           return;
         }
         const username = String(payload?.username || '').trim().toLowerCase();
-        const account = accounts.get(username);
+        const account = await getAccountByUsername(username);
         if (!account || account.role === 'admin') {
           ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Không thể xóa tài khoản này.' }));
           return;
@@ -1137,13 +1213,13 @@ wss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'AUTH_ERROR', payload: 'Không thể xóa tài khoản. Vui lòng thử lại.' }));
           return;
         }
-        accounts.delete(username);
         for (const [token, session] of authSessions.entries()) {
-          if (session.username === username) authSessions.delete(token);
+          if (session.username.toLowerCase() === username) authSessions.delete(token);
         }
+        const accountList = await getAllAccounts();
         ws.send(JSON.stringify({
           type: 'ACCOUNT_LIST',
-          payload: [...accounts.values()].map(({ username: name, role, createdAt }) => ({ username: name, role, createdAt })),
+          payload: accountList,
         }));
         return;
       }
