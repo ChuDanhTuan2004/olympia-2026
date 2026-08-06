@@ -518,11 +518,23 @@ function advanceWarmupQuestion(roomId: string, room: GameState) {
     addRoomLog(room, `Chuyển sang câu Khởi động ${room.currentQuestionIndex + 1}.`, 'info');
   } else {
     if (room.warmupState) room.warmupState.phase = 'completed';
+    room.currentRound = 'obstacle';
+    room.currentQuestionIndex = 0;
+    room.obstacleState = {
+      openedClues: [],
+      keywordGuessed: false,
+    };
+    if (room.questions?.obstacle) {
+      room.questions.obstacle.isKeywordRevealed = false;
+      room.questions.obstacle.clues.forEach((clue) => {
+        clue.isOpened = false;
+      });
+    }
     room.activeBuzzer = undefined;
-    room.buzzerLocked = true;
-    room.timerSeconds = 0;
-    room.timerActive = false;
-    addRoomLog(room, 'Đã hoàn thành toàn bộ câu hỏi vòng Khởi động.', 'success');
+    room.buzzerLocked = false;
+    room.timerSeconds = 90;
+    room.timerActive = true;
+    addRoomLog(room, 'Hoàn thành vòng Khởi động. Tự động chuyển sang Vượt chướng ngại vật.', 'success');
   }
   broadcastRoomState(roomId);
 }
