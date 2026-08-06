@@ -75,6 +75,11 @@ export default function App() {
         if (msg.type === 'INIT_STATE' || msg.type === 'STATE_UPDATE') {
           setRoom(msg.payload as GameState);
           setIsGenerating(false);
+        } else if (msg.type === 'ROOM_CANCELLED') {
+          setRoom(null);
+          setRole('spectator');
+          setAnswerResult(null);
+          setIsGenerating(false);
         } else if (msg.type === 'ERROR') {
           setErrorMessage(msg.payload as string);
           setTimeout(() => setErrorMessage(null), 4000);
@@ -207,6 +212,10 @@ export default function App() {
     sendMessage('RESET_GAME');
   };
 
+  const handleCancelRoom = () => {
+    sendMessage('CANCEL_ROOM');
+  };
+
   return (
     <div className="min-h-screen bg-[#09090b] text-neutral-100 font-sans selection:bg-white selection:text-black pb-20 relative">
       {/* Persistent Top Right Button (Rules Icon - accessible on all pages) */}
@@ -331,6 +340,7 @@ export default function App() {
               onPauseTimer={handlePauseTimer}
               onUpdateScore={handleUpdateScore}
               onResetGame={handleResetGame}
+              onCancelRoom={handleCancelRoom}
             />
           )}
         </>

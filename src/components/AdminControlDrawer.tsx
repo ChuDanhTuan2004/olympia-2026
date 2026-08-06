@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState } from '../types';
-import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw } from 'lucide-react';
+import { ShieldAlert, Play, Pause, FastForward, Plus, Minus, History, RotateCcw, Trash2 } from 'lucide-react';
 
 interface AdminControlDrawerProps {
   room: GameState;
@@ -9,6 +9,7 @@ interface AdminControlDrawerProps {
   onPauseTimer: () => void;
   onUpdateScore: (playerId: string, newScore: number) => void;
   onResetGame: () => void;
+  onCancelRoom: () => void;
 }
 
 export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
@@ -18,6 +19,7 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
   onPauseTimer,
   onUpdateScore,
   onResetGame,
+  onCancelRoom,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(room.players[0]?.id || '');
@@ -167,6 +169,17 @@ export const AdminControlDrawer: React.FC<AdminControlDrawerProps> = ({
             className="w-full py-2.5 bg-stone-100 hover:bg-stone-200/80 border border-red-200 text-red-700 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
           >
             <RotateCcw className="w-3.5 h-3.5 stroke-[1.75]" /> ĐẶT LẠI TRẬN THI ĐẤU
+          </button>
+
+          <button
+            onClick={() => {
+              if (window.confirm('Hủy phòng sẽ đưa tất cả người chơi về sảnh. Bạn có chắc chắn?')) {
+                onCancelRoom();
+              }
+            }}
+            className="w-full py-2.5 bg-red-600 hover:bg-red-700 border border-red-700 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+          >
+            <Trash2 className="w-3.5 h-3.5 stroke-[1.75]" /> HỦY PHÒNG
           </button>
         </div>
       )}

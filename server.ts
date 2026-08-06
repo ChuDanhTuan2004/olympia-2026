@@ -969,6 +969,36 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        case 'CANCEL_ROOM': {
+          if (role !== 'admin') {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ chủ phòng mới có quyền hủy phòng!' }));
+            return;
+          }
+
+          const pendingAccelerationAdvance = accelerationAdvanceTimers.get(roomId);
+          if (pendingAccelerationAdvance) {
+            clearTimeout(pendingAccelerationAdvance);
+            accelerationAdvanceTimers.delete(roomId);
+          }
+
+          const cancelledMessage = JSON.stringify({
+            type: 'ROOM_CANCELLED',
+            payload: { roomCode: room.roomCode },
+          });
+
+          for (const [client, info] of clientRoomMap.entries()) {
+            if (info.roomId === roomId) {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(cancelledMessage);
+              }
+              clientRoomMap.delete(client);
+            }
+          }
+
+          rooms.delete(roomId);
+          return;
+        }
+
         case 'RESET_GAME': {
           if (role !== 'admin') {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền đặt lại trận đấu!' }));

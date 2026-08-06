@@ -174,6 +174,8 @@ export type WSMessageType =
   | 'START_TIMER'
   | 'PAUSE_TIMER'
   | 'RESET_GAME'
+  | 'CANCEL_ROOM'
+  | 'ROOM_CANCELLED'
   | 'ERROR';
 
 export interface WSMessage {
