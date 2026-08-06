@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Award, Shield, UserCheck, Sparkles, Play, RefreshCw, Layers, LogOut, UserCog } from 'lucide-react';
+import { ArrowLeft, Award, Shield, UserCheck, Sparkles, Play, Layers, LogOut, UserCog } from 'lucide-react';
 import { AccountRole, GameState, Role } from '../types';
 
 interface LobbyProps {
   room?: GameState;
   role?: Role;
   onJoinRoom: (roomCode: string, role: Role, name?: string, avatar?: string) => void;
-  onGenerateQuestions: (topic?: string) => void;
-  onStartGame: () => void;
+  onStartGame: (topic: string) => void;
   isGenerating: boolean;
   accountRole: AccountRole;
   accountUsername: string;
@@ -21,7 +20,6 @@ export const Lobby: React.FC<LobbyProps> = ({
   room,
   role = 'spectator',
   onJoinRoom,
-  onGenerateQuestions,
   onStartGame,
   isGenerating,
   accountRole,
@@ -283,23 +281,25 @@ export const Lobby: React.FC<LobbyProps> = ({
               />
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div>
               <button
-                onClick={() => onGenerateQuestions(customTopic)}
-                disabled={isGenerating}
-                className="flex-1 py-3.5 px-4 bg-white hover:bg-stone-50 border border-stone-200/80 text-teal-800 font-semibold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50"
+                onClick={() => onStartGame(customTopic.trim())}
+                disabled={room.players.length === 0 || !customTopic.trim() || isGenerating}
+                className="w-full py-3.5 px-6 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl text-base font-bold shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
-                <RefreshCw className={`w-4 h-4 stroke-[1.75] ${isGenerating ? 'animate-spin text-teal-600' : ''}`} />
-                {isGenerating ? 'Gemini đang tạo câu hỏi...' : 'TẠO BỘ CÂU HỎI'}
+                {isGenerating ? (
+                  <>
+                    <Sparkles className="w-5 h-5 animate-pulse" /> GEMINI ĐANG SOẠN CÂU HỎI...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 fill-current" /> TẠO CÂU HỎI & BẮT ĐẦU
+                  </>
+                )}
               </button>
-
-              <button
-                onClick={onStartGame}
-                disabled={room.players.length === 0}
-                className="flex-1 py-3.5 px-6 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl text-base shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                <Play className="w-5 h-5 fill-current" /> BẮT ĐẦU TRẬN THI ĐẤU
-              </button>
+              {!customTopic.trim() && (
+                <p className="mt-2 text-center text-xs font-medium text-slate-500">Nhập chủ đề để bắt đầu trận thi.</p>
+              )}
             </div>
           </div>
         ) : (

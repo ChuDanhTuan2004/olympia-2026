@@ -286,8 +286,7 @@ function getDefaultQuestions(): OlympiaQuestions {
 async function generateGeminiQuestions(topicCustom?: string): Promise<OlympiaQuestions> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.warn('GEMINI_API_KEY missing, using high-quality default Olympia questions dataset.');
-    return getDefaultQuestions();
+    throw new Error('GEMINI_API_KEY chưa được cấu hình.');
   }
 
   const cleanTopic = topicCustom ? topicCustom.trim() : '';
@@ -464,7 +463,7 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     return data;
   } catch (error) {
     console.error('Error generating questions with Gemini:', error);
-    return getDefaultQuestions();
+    throw error;
   }
 }
 
@@ -1062,11 +1061,33 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Cần ít nhất 1 thí sinh để bắt đầu!' }));
             return;
           }
+          const customTopic = String(payload?.topicCustom || '').trim();
+          if (!customTopic) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'MC cần nhập chủ đề trước khi bắt đầu.' }));
+            return;
+          }
+
+          room.isGeneratingQuestions = true;
+          room.timerActive = false;
+          addRoomLog(room, `Gemini đang soạn bộ câu hỏi theo chủ đề: "${customTopic}"...`, 'info');
+          broadcastRoomState(roomId);
+
+          try {
+            room.questions = await generateGeminiQuestions(customTopic);
+          } catch (error) {
+            room.isGeneratingQuestions = false;
+            const message = error instanceof Error ? error.message : 'Không thể tạo câu hỏi bằng Gemini.';
+            ws.send(JSON.stringify({ type: 'ERROR', payload: message }));
+            broadcastRoomState(roomId);
+            return;
+          }
+
+          room.isGeneratingQuestions = false;
           room.status = 'playing';
           room.currentRound = 'warmup';
           room.currentQuestionIndex = 0;
           resetWarmupQuestion(room);
-          addRoomLog(room, '🚀 TRẬN THI ĐẤU CHÍNH THỨC BẮT ĐẦU! VÒNG 1: KHỞI ĐỘNG', 'success');
+          addRoomLog(room, `Bộ câu hỏi chủ đề "${customTopic}" đã sẵn sàng. Bắt đầu vòng Khởi động!`, 'success');
           break;
         }
 
