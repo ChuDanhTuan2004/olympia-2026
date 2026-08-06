@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -287,13 +288,16 @@ function getDefaultQuestions(): OlympiaQuestions {
 
 // Function to generate questions using Gemini API
 async function generateGeminiQuestions(topicCustom?: string): Promise<OlympiaQuestions> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const cleanTopic = topicCustom ? topicCustom.trim() : '';
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+
   if (!apiKey) {
-    console.warn('GEMINI_API_KEY missing, using high-quality default Olympia questions dataset.');
+    console.warn('GEMINI_API_KEY missing.');
+    if (cleanTopic) {
+      throw new Error('Chưa thiết lập GEMINI_API_KEY trong hệ thống. Vui lòng thêm GEMINI_API_KEY vào cấu hình để tạo câu hỏi AI theo chủ đề.');
+    }
     return getDefaultQuestions();
   }
-
-  const cleanTopic = topicCustom ? topicCustom.trim() : '';
 
   const systemPrompt = `Bạn là biên tập viên chuyên nghiệp của chương trình "Đường lên đỉnh Olympia" Đài Truyền hình Việt Nam (VTV). 
 Nhiệm vụ của bạn là soạn bộ câu hỏi chính xác, chuẩn xác kiến thức, hấp dẫn và công bằng cho 1 trận thi đấu giữa 4 thí sinh.
@@ -326,7 +330,7 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
   try {
     const ai = getGeminiClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
@@ -466,8 +470,11 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     }
 
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating questions with Gemini:', error);
+    if (cleanTopic) {
+      throw new Error(`Lỗi gọi Gemini AI (${error?.message || 'Không thể tạo bộ câu hỏi'}). Vui lòng kiểm tra lại GEMINI_API_KEY.`);
+    }
     return getDefaultQuestions();
   }
 }
