@@ -293,13 +293,9 @@ export default function App() {
     }
   };
 
-  const handleGenerateQuestions = (topic?: string) => {
+  const handleStartGame = (topic: string) => {
     setIsGenerating(true);
-    sendMessage('GENERATE_QUESTIONS', { topicCustom: topic });
-  };
-
-  const handleStartGame = () => {
-    sendMessage('START_GAME');
+    sendMessage('START_GAME', { topicCustom: topic });
   };
 
   const handleNextRound = (targetRound?: string) => {
@@ -427,7 +423,6 @@ export default function App() {
           room={room || undefined}
           role={role}
           onJoinRoom={handleJoinRoom}
-          onGenerateQuestions={handleGenerateQuestions}
           onStartGame={handleStartGame}
           isGenerating={isGenerating}
           accountRole={authUser.role}

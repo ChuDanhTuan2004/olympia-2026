@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -9,6 +9,11 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
 import { Pool } from 'pg';
 import { AccountRole, GameState, OlympiaQuestions, WSMessage, RoundType } from './src/types.js';
+
+// Local development commonly keeps secrets in .env.local, while deployments
+// inject them into process.env. Load .env.local first, then fall back to .env.
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
@@ -330,7 +335,7 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
   try {
     const ai = getGeminiClient();
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash',
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
@@ -1073,6 +1078,23 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Cần ít nhất 1 thí sinh để bắt đầu!' }));
             return;
           }
+          const customTopic = payload?.topicCustom?.trim();
+          if (!customTopic) {
+            ws.send(JSON.stringify({ type: 'ERROR', payload: 'Vui lòng nhập chủ đề trước khi bắt đầu trận đấu.' }));
+            return;
+          }
+
+          addRoomLog(room, `Gemini AI đang soạn bộ câu hỏi theo chủ đề: "${customTopic}"...`, 'info');
+          try {
+            room.questions = await generateGeminiQuestions(customTopic);
+          } catch (error: any) {
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              payload: error?.message || 'Không thể tạo bộ câu hỏi bằng Gemini AI.',
+            }));
+            return;
+          }
+
           room.status = 'playing';
           room.currentRound = 'warmup';
           room.currentQuestionIndex = 0;
