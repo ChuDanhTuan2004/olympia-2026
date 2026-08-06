@@ -351,7 +351,7 @@ function recordAnswerResult(
 
 // Default fallback questions in case Gemini key is missing or fails
 function getDefaultQuestions(): OlympiaQuestions {
-  return {
+  return ensureMultipleChoiceQuestions({
     warmup: [
       { id: 'w1', question: 'Tác phẩm "Truyện Kiều" của Nguyễn Du được viết bằng chữ gì?', answer: 'Chữ Nôm', points: 10 },
       { id: 'w2', question: 'Hành tinh nào trong Hệ Mặt Trời được gọi là Hỏa Tinh?', answer: 'Sao Hỏa (Mars)', points: 10 },
@@ -406,7 +406,48 @@ function getDefaultQuestions(): OlympiaQuestions {
         { id: 'f4_3', pointValue: 30, question: 'Nhà toán học nào nổi tiếng với mệnh đề "Không có ba số nguyên dương a, b, c thỏa mãn a^n + b^n = c^n với n > 2"?', answer: 'Pierre de Fermat (Định lý lớn Fermat)', explanation: 'Được chứng minh bởi Andrew Wiles năm 1994.' },
       ],
     },
-  };
+  });
+}
+
+type ChoiceQuestion = { answer: string; choices?: string[] };
+
+function ensureMultipleChoiceQuestions(questions: OlympiaQuestions): OlympiaQuestions {
+  const finishQuestions = Object.values(questions.finish).flatMap((items) => items || []);
+  const questionGroups: ChoiceQuestion[][] = [
+    questions.warmup,
+    questions.obstacle.clues,
+    questions.acceleration,
+    finishQuestions,
+  ];
+  let questionOffset = 0;
+
+  questionGroups.forEach((group) => {
+    const answerPool = group.map((question) => String(question.answer || '').trim()).filter(Boolean);
+    group.forEach((question, questionIndex) => {
+      const correctAnswer = String(question.answer || '').trim();
+      const uniqueChoices: string[] = [];
+      const addChoice = (choice: unknown) => {
+        const value = String(choice || '').trim();
+        if (!value || uniqueChoices.some((item) => normalizeString(item) === normalizeString(value))) return;
+        uniqueChoices.push(value);
+      };
+
+      addChoice(correctAnswer);
+      (question.choices || []).forEach(addChoice);
+      answerPool.forEach(addChoice);
+
+      while (uniqueChoices.length < 4) {
+        addChoice(`Phương án ${uniqueChoices.length + 1}`);
+      }
+
+      const selectedChoices = uniqueChoices.slice(0, 4);
+      const offset = (questionOffset + questionIndex) % selectedChoices.length;
+      question.choices = [...selectedChoices.slice(offset), ...selectedChoices.slice(0, offset)];
+    });
+    questionOffset += group.length;
+  });
+
+  return questions;
 }
 
 // Function to generate questions using Gemini API
@@ -444,6 +485,8 @@ Cấu trúc gồm đủ 4 phần thi:
    - player3Package: 3 câu hỏi (2 câu 20 điểm, 1 câu 30 điểm).
    - player4Package: 3 câu hỏi (2 câu 20 điểm, 1 câu 30 điểm).
 
+Mỗi câu hỏi trong warmup, 4 clues của obstacle, acceleration và finish BẮT BUỘC có trường choices gồm đúng 4 phương án khác nhau. Trường answer phải trùng chính xác với một phần tử trong choices. Chỉ keyword của Chướng ngại vật là câu trả lời nhập tự do, không có choices.
+
 Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án Tiếng Việt chính xác 100%.`;
 
   const userPrompt = cleanTopic !== '' 
@@ -451,6 +494,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
     : 'Hãy tạo trọn bộ câu hỏi Đường lên đỉnh Olympia hoàn chỉnh phủ rộng đa dạng các lĩnh vực.';
 
   try {
+    const choicesSchema = {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+    };
     const ai = getGeminiClient();
     const response = await ai.models.generateContent({
       model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash',
@@ -469,10 +516,11 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                   id: { type: Type.STRING },
                   question: { type: Type.STRING },
                   answer: { type: Type.STRING },
+                  choices: choicesSchema,
                   explanation: { type: Type.STRING },
                   points: { type: Type.NUMBER },
                 },
-                required: ['id', 'question', 'answer', 'points'],
+                required: ['id', 'question', 'answer', 'choices', 'points'],
               },
             },
             obstacle: {
@@ -489,10 +537,11 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                       number: { type: Type.NUMBER },
                       question: { type: Type.STRING },
                       answer: { type: Type.STRING },
+                      choices: choicesSchema,
                       letterCount: { type: Type.NUMBER },
                       isOpened: { type: Type.BOOLEAN },
                     },
-                    required: ['number', 'question', 'answer', 'letterCount'],
+                    required: ['number', 'question', 'answer', 'choices', 'letterCount'],
                   },
                 },
               },
@@ -507,9 +556,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                   number: { type: Type.NUMBER },
                   question: { type: Type.STRING },
                   answer: { type: Type.STRING },
+                  choices: choicesSchema,
                   type: { type: Type.STRING },
                 },
-                required: ['id', 'number', 'question', 'answer'],
+                required: ['id', 'number', 'question', 'answer', 'choices'],
               },
             },
             finish: {
@@ -524,9 +574,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                       pointValue: { type: Type.NUMBER },
                       question: { type: Type.STRING },
                       answer: { type: Type.STRING },
+                      choices: choicesSchema,
                       explanation: { type: Type.STRING },
                     },
-                    required: ['id', 'pointValue', 'question', 'answer'],
+                    required: ['id', 'pointValue', 'question', 'answer', 'choices'],
                   },
                 },
                 player2Package: {
@@ -538,9 +589,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                       pointValue: { type: Type.NUMBER },
                       question: { type: Type.STRING },
                       answer: { type: Type.STRING },
+                      choices: choicesSchema,
                       explanation: { type: Type.STRING },
                     },
-                    required: ['id', 'pointValue', 'question', 'answer'],
+                    required: ['id', 'pointValue', 'question', 'answer', 'choices'],
                   },
                 },
                 player3Package: {
@@ -552,9 +604,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                       pointValue: { type: Type.NUMBER },
                       question: { type: Type.STRING },
                       answer: { type: Type.STRING },
+                      choices: choicesSchema,
                       explanation: { type: Type.STRING },
                     },
-                    required: ['id', 'pointValue', 'question', 'answer'],
+                    required: ['id', 'pointValue', 'question', 'answer', 'choices'],
                   },
                 },
                 player4Package: {
@@ -566,9 +619,10 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
                       pointValue: { type: Type.NUMBER },
                       question: { type: Type.STRING },
                       answer: { type: Type.STRING },
+                      choices: choicesSchema,
                       explanation: { type: Type.STRING },
                     },
-                    required: ['id', 'pointValue', 'question', 'answer'],
+                    required: ['id', 'pointValue', 'question', 'answer', 'choices'],
                   },
                 },
               },
@@ -597,7 +651,7 @@ Trả về kết quả JSON theo đúng định dạng. Đảm bảo đáp án T
       data.obstacle.isKeywordRevealed = false;
     }
 
-    return data;
+    return ensureMultipleChoiceQuestions(data);
   } catch (error: any) {
     console.error('Error generating questions with Gemini:', error);
     if (cleanTopic) {
@@ -656,6 +710,17 @@ function checkAnswerCorrectness(userAns: string, correctAns: string): boolean {
   }
 
   return false;
+}
+
+function checkQuestionChoice(
+  userAnswer: string,
+  question?: { answer: string; choices?: string[] }
+): boolean {
+  if (!question) return false;
+  if (question.choices && question.choices.length > 0) {
+    return normalizeString(userAnswer) === normalizeString(question.answer);
+  }
+  return checkAnswerCorrectness(userAnswer, question.answer);
 }
 
 // Helper to initialize a new Room
@@ -1521,7 +1586,7 @@ wss.on('connection', (ws) => {
               const q = room.questions?.warmup[room.currentQuestionIndex];
               const isCorrect =
                 actionType !== 'skip' && q
-                  ? checkAnswerCorrectness(answerText, q.answer)
+                  ? checkQuestionChoice(answerText, q)
                   : false;
 
               room.warmupState.playerAnswers[player.id] =
@@ -1596,7 +1661,7 @@ wss.on('connection', (ws) => {
               }
               addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA câu Tăng tốc.`, 'info');
             } else {
-              const isCorrect = q ? checkAnswerCorrectness(answerText, q.answer) : false;
+              const isCorrect = checkQuestionChoice(answerText, q);
               let pointsAwarded = 0;
               if (isCorrect) {
                 const correctCountBefore = room.accelerationState.playerSubmissions.filter((s) => s.isCorrect).length;
@@ -1692,7 +1757,7 @@ wss.on('connection', (ws) => {
                 addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA câu Về đích${starActive ? ` (-${deduct}đ do Ngôi sao hy vọng)` : ''}. Các thí sinh khác có thể BẤM CHUÔNG CƯỚP ĐIỂM!`, 'warning');
                 room.finishState.turnPhase = 'stealer_buzzer';
               } else {
-                const isCorrect = q ? checkAnswerCorrectness(answerText, q.answer) : false;
+                const isCorrect = checkQuestionChoice(answerText, q);
                 if (isCorrect) {
                   const pts = starActive ? basePoints * 2 : basePoints;
                   player.score += pts;
@@ -1720,7 +1785,7 @@ wss.on('connection', (ws) => {
                 recordAnswerResult(player, false, 0);
                 addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA cướp điểm.`, 'info');
               } else {
-                const isCorrect = q ? checkAnswerCorrectness(answerText, q.answer) : false;
+                const isCorrect = checkQuestionChoice(answerText, q);
                 if (isCorrect) {
                   player.score += basePoints;
                   recordAnswerResult(player, true, basePoints);
@@ -1791,7 +1856,7 @@ wss.on('connection', (ws) => {
 
           const answer = String(payload?.answer || '').trim();
           if (!answer) return;
-          const isCorrect = checkAnswerCorrectness(answer, clue.answer);
+          const isCorrect = checkQuestionChoice(answer, clue);
           state.clueSubmissions.push({ playerId: player.id, answer, isCorrect });
           if (isCorrect) {
             player.score += 10;

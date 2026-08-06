@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, CheckCircle2, KeyRound, LockKeyhole, Send, Shield, Unlock } from 'lucide-react';
+import { Bell, CheckCircle2, KeyRound, LockKeyhole, Shield, Unlock } from 'lucide-react';
 import { GameState, Role } from '../types';
 import { sounds } from '../lib/audio';
+import { MultipleChoiceAnswers } from './MultipleChoiceAnswers';
 
 interface RoundObstacleProps {
   room: GameState;
@@ -24,7 +25,6 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
 }) => {
   const obstacle = room.questions?.obstacle;
   const state = room.obstacleState;
-  const [clueAnswer, setClueAnswer] = useState('');
   const [keywordGuess, setKeywordGuess] = useState('');
   const currentClueRef = useRef<HTMLElement>(null);
 
@@ -43,10 +43,6 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
   const ownSubmission = state?.clueSubmissions?.find(
     (submission) => submission.playerId === playerId
   );
-
-  useEffect(() => {
-    setClueAnswer('');
-  }, [state?.currentClueIndex]);
 
   useEffect(() => {
     if (role !== 'player' || !currentClue || state?.phase === 'selecting_clue') return;
@@ -69,14 +65,6 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
     !activeBuzzedPlayer &&
     state.phase !== 'keyword_answering' &&
     state.phase !== 'revealing_keyword';
-
-  const submitClue = (event: React.FormEvent) => {
-    event.preventDefault();
-    const answer = clueAnswer.trim();
-    if (!answer) return;
-    onSubmitClueAnswer(answer);
-    setClueAnswer('');
-  };
 
   const submitKeyword = (event: React.FormEvent) => {
     event.preventDefault();
@@ -204,21 +192,10 @@ export const RoundObstacle: React.FC<RoundObstacleProps> = ({
               Câu hỏi đang tạm dừng trong lúc một thí sinh đoán chướng ngại vật.
             </div>
           ) : state.phase === 'answering_clue' ? (
-            <form onSubmit={submitClue} className="flex gap-3">
-              <input
-                value={clueAnswer}
-                onChange={(event) => setClueAnswer(event.target.value)}
-                placeholder="Nhập câu trả lời"
-                className="min-w-0 flex-1 rounded-2xl border border-neutral-300 px-4 py-3 outline-none focus:border-black"
-                autoFocus
-              />
-              <button
-                disabled={!clueAnswer.trim()}
-                className="flex items-center gap-2 rounded-2xl bg-black px-5 font-bold text-white disabled:opacity-40"
-              >
-                <Send className="h-4 w-4" /> Gửi
-              </button>
-            </form>
+            <MultipleChoiceAnswers
+              choices={currentClue.choices}
+              onSelect={onSubmitClueAnswer}
+            />
           ) : null}
           </section>
         </>

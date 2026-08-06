@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { GameState, Role } from '../types';
-import { Zap, Clock, Shield, CheckCircle2, HelpCircle, SkipForward, Users } from 'lucide-react';
+import { Zap, Clock, Shield, CheckCircle2, HelpCircle, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
+import { MultipleChoiceAnswers } from './MultipleChoiceAnswers';
 
 interface RoundAccelerationProps {
   room: GameState;
@@ -22,11 +23,9 @@ export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
   const currentIdx = room.currentQuestionIndex % (accelQuestions.length || 1);
   const q = accelQuestions[currentIdx];
 
-  const [answerInput, setAnswerInput] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   React.useEffect(() => {
-    setAnswerInput('');
     setHasSubmitted(false);
   }, [room.currentQuestionIndex]);
 
@@ -34,17 +33,10 @@ export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
     return <div className="text-center py-12 text-slate-400">Chưa có dữ liệu Vòng Tăng Tốc.</div>;
   }
 
-  const handleConfirmSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!answerInput.trim() || hasSubmitted) return;
-    sounds.playTick();
-    onSubmitAnswer(answerInput.trim(), 'confirm');
-    setHasSubmitted(true);
-  };
-
-  const handleSkipSubmit = () => {
+  const handleChoiceSelect = (answer: string) => {
     if (hasSubmitted) return;
-    onSubmitAnswer('', 'skip');
+    sounds.playTick();
+    onSubmitAnswer(answer, 'confirm');
     setHasSubmitted(true);
   };
 
@@ -100,39 +92,13 @@ export const RoundAcceleration: React.FC<RoundAccelerationProps> = ({
             {!hasSubmitted ? (
               <div className="bg-stone-50 border border-teal-300 rounded-2xl p-4 sm:p-5 space-y-4 shadow-md">
                 <div className="text-xs font-bold text-teal-800 uppercase flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-teal-600 stroke-[1.75]" /> NHẬP NHANH ĐÁP ÁN TĂNG TỐC:
+                  <Zap className="w-4 h-4 text-teal-600 stroke-[1.75]" /> CHỌN NHANH ĐÁP ÁN A, B, C HOẶC D:
                 </div>
-
-                {/* Input Box */}
-                <input
-                  type="text"
-                  placeholder="Gõ đáp án của bạn tại đây..."
-                  value={answerInput}
-                  onChange={(e) => setAnswerInput(e.target.value)}
+                <MultipleChoiceAnswers
+                  choices={q.choices}
+                  onSelect={handleChoiceSelect}
                   disabled={room.timerSeconds === 0}
-                  className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-slate-800 font-bold text-base focus:outline-none focus:border-teal-500 shadow-sm disabled:opacity-50"
-                  autoFocus
                 />
-
-                {/* 2 Buttons directly UNDER the input box */}
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSkipSubmit}
-                    disabled={room.timerSeconds === 0}
-                    className="flex-1 py-3 px-4 bg-stone-100 hover:bg-stone-200 text-slate-700 font-bold rounded-2xl text-sm flex items-center justify-center gap-2 border border-stone-300 transition-all active:scale-95 disabled:opacity-50 shadow-sm"
-                  >
-                    <SkipForward className="w-4 h-4 stroke-[1.75]" /> BỎ QUA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmSubmit}
-                    disabled={!answerInput.trim() || room.timerSeconds === 0}
-                    className="flex-1 py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-md shadow-teal-600/20 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-4 h-4 stroke-[1.75]" /> XÁC NHẬN
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="bg-teal-50 border border-teal-300 rounded-2xl p-4 text-center text-teal-800 font-bold text-sm shadow-sm flex items-center justify-center gap-2">

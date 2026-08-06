@@ -1,7 +1,8 @@
 import React from 'react';
 import { GameState, Role } from '../types';
-import { Ban, Bell, CheckCircle2, Clock, HelpCircle, Shield, SkipForward, Users } from 'lucide-react';
+import { Ban, Bell, Clock, HelpCircle, Shield, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
+import { MultipleChoiceAnswers } from './MultipleChoiceAnswers';
 
 interface RoundWarmUpProps {
   room: GameState;
@@ -23,8 +24,6 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
   const currentIdx = room.currentQuestionIndex;
   const q = warmupQuestions[currentIdx];
 
-  const [answerInput, setAnswerInput] = React.useState('');
-
   const activeBuzzedPlayer = room.players.find((p) => p.id === room.activeBuzzer?.playerId);
   const isSelfBuzzed = activeBuzzedPlayer?.id === playerId;
   const warmupState = room.warmupState;
@@ -37,29 +36,9 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
     !room.buzzerLocked &&
     !hasLostAnswerRight;
 
-  React.useEffect(() => {
-    setAnswerInput('');
-  }, [room.currentQuestionIndex]);
-
   const handleBuzzerClick = () => {
     sounds.playBuzzer();
     onPressBuzzer();
-  };
-
-  const handleConfirmAnswer = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!answerInput.trim()) return;
-    if (onSubmitAnswer) {
-      onSubmitAnswer(answerInput.trim(), 'confirm');
-    }
-    setAnswerInput('');
-  };
-
-  const handleSkipQuestion = () => {
-    if (onSubmitAnswer) {
-      onSubmitAnswer('', 'skip');
-    }
-    setAnswerInput('');
   };
 
   if (!q) {
@@ -180,37 +159,12 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
             {isSelfBuzzed && (
               <div className="bg-stone-50 border border-teal-300 rounded-2xl p-4 sm:p-5 space-y-4 shadow-md">
                 <div className="text-xs font-bold text-teal-800 uppercase flex items-center gap-2">
-                  <Bell className="w-4 h-4 animate-bounce text-teal-600 stroke-[1.75]" /> BẠN ĐÃ GIÀNH QUYỀN TRẢ LỜI! HÃY NHẬP ĐÁP ÁN:
+                  <Bell className="w-4 h-4 animate-bounce text-teal-600 stroke-[1.75]" /> BẠN ĐÃ GIÀNH QUYỀN TRẢ LỜI! HÃY CHỌN A, B, C HOẶC D:
                 </div>
-                
-                {/* Answer Input Box */}
-                <input
-                  type="text"
-                  placeholder="Gõ đáp án của bạn tại đây..."
-                  value={answerInput}
-                  onChange={(e) => setAnswerInput(e.target.value)}
-                  className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-slate-800 font-bold text-base focus:outline-none focus:border-teal-500 shadow-sm"
-                  autoFocus
+                <MultipleChoiceAnswers
+                  choices={q.choices}
+                  onSelect={(answer) => onSubmitAnswer?.(answer, 'confirm')}
                 />
-
-                {/* 2 Buttons directly UNDER the answer input box */}
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSkipQuestion}
-                    className="flex-1 py-3 px-4 bg-stone-100 hover:bg-stone-200 text-slate-700 font-bold rounded-2xl text-sm flex items-center justify-center gap-2 border border-stone-300 transition-all active:scale-95 shadow-sm"
-                  >
-                    <SkipForward className="w-4 h-4 stroke-[1.75]" /> BỎ QUA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmAnswer}
-                    disabled={!answerInput.trim()}
-                    className="flex-1 py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-md shadow-teal-600/20 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-4 h-4 stroke-[1.75]" /> XÁC NHẬN
-                  </button>
-                </div>
               </div>
             )}
           </div>

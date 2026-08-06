@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GameState, Role, FinishQuestion } from '../types';
-import { Star, Bell, Shield, CheckCircle2, XCircle, HelpCircle, SkipForward, Users } from 'lucide-react';
+import { Star, Bell, Shield, CheckCircle2, XCircle, HelpCircle, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
+import { MultipleChoiceAnswers } from './MultipleChoiceAnswers';
 
 interface RoundFinishProps {
   room: GameState;
@@ -32,7 +33,11 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
   const currentQuestionIdx = finishState?.questionIndex || 0;
   const currentQ = questions[currentQuestionIdx];
 
-  const [answerInput, setAnswerInput] = useState('');
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+
+  useEffect(() => {
+    setSelectedAnswer('');
+  }, [currentQuestionIdx, finishState?.activeTurnPlayerId, finishState?.turnPhase]);
 
   if (!currentQ || !activeTurnPlayer) {
     return <div className="text-center py-12 text-slate-400">Chưa có dữ liệu Vòng Về Đích.</div>;
@@ -56,16 +61,10 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
     onPressBuzzer();
   };
 
-  const handleConfirmSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!answerInput.trim()) return;
-    onSubmitAnswer(answerInput.trim(), 'confirm');
-    setAnswerInput('');
-  };
-
-  const handleSkipSubmit = () => {
-    onSubmitAnswer('', 'skip');
-    setAnswerInput('');
+  const handleChoiceSelect = (answer: string) => {
+    if (selectedAnswer) return;
+    setSelectedAnswer(answer);
+    onSubmitAnswer(answer, 'confirm');
   };
 
   return (
@@ -165,37 +164,14 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
         {role === 'player' && isMainPlayer && (
           <div className="mt-6 bg-stone-50 border border-teal-300 rounded-2xl p-4 sm:p-5 space-y-4 shadow-md">
             <div className="text-xs font-bold text-teal-800 uppercase flex items-center gap-2">
-              <span>💬 LƯỢT CHÍNH CỦA BẠN - HÃY NHẬP ĐÁP ÁN:</span>
+              <span>💬 LƯỢT CHÍNH CỦA BẠN — HÃY CHỌN A, B, C HOẶC D:</span>
             </div>
-
-            {/* Input Box */}
-            <input
-              type="text"
-              placeholder="Nhập câu trả lời của bạn..."
-              value={answerInput}
-              onChange={(e) => setAnswerInput(e.target.value)}
-              className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-slate-800 font-bold text-base focus:outline-none focus:border-teal-500 shadow-sm"
-              autoFocus
+            <MultipleChoiceAnswers
+              choices={currentQ.choices}
+              onSelect={handleChoiceSelect}
+              selectedAnswer={selectedAnswer || finishState?.mainPlayerAnswer}
+              disabled={Boolean(selectedAnswer || finishState?.mainPlayerAnswer)}
             />
-
-            {/* 2 Buttons directly UNDER the input box */}
-            <div className="flex gap-3 pt-1">
-              <button
-                type="button"
-                onClick={handleSkipSubmit}
-                className="flex-1 py-3 px-4 bg-stone-100 hover:bg-stone-200 text-slate-700 font-bold rounded-2xl text-sm flex items-center justify-center gap-2 border border-stone-300 transition-all active:scale-95 shadow-sm"
-              >
-                <SkipForward className="w-4 h-4 stroke-[1.75]" /> BỎ QUA
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmSubmit}
-                disabled={!answerInput.trim()}
-                className="flex-1 py-3 px-4 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-md shadow-teal-600/20 transition-all active:scale-95 disabled:opacity-50"
-              >
-                <CheckCircle2 className="w-4 h-4 stroke-[1.75]" /> XÁC NHẬN
-              </button>
-            </div>
           </div>
         )}
 
@@ -205,37 +181,14 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
             {room.activeBuzzer?.playerId === playerId ? (
               <div className="bg-stone-50 border border-red-300 rounded-2xl p-4 sm:p-5 space-y-4 shadow-md">
                 <div className="text-xs font-bold text-red-700 uppercase flex items-center gap-2">
-                  <Bell className="w-4 h-4 animate-bounce text-red-600 stroke-[1.75]" /> BẠN ĐÃ GIÀNH QUYỀN CƯỚP ĐIỂM! HÃY NHẬP CÂU TRẢ LỜI:
+                  <Bell className="w-4 h-4 animate-bounce text-red-600 stroke-[1.75]" /> BẠN ĐÃ GIÀNH QUYỀN CƯỚP ĐIỂM! HÃY CHỌN A, B, C HOẶC D:
                 </div>
-
-                {/* Input Box */}
-                <input
-                  type="text"
-                  placeholder="Nhập đáp án cướp điểm..."
-                  value={answerInput}
-                  onChange={(e) => setAnswerInput(e.target.value)}
-                  className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-slate-800 font-bold text-base focus:outline-none focus:border-red-500 shadow-sm"
-                  autoFocus
+                <MultipleChoiceAnswers
+                  choices={currentQ.choices}
+                  onSelect={handleChoiceSelect}
+                  selectedAnswer={selectedAnswer || finishState?.stealerAnswer}
+                  disabled={Boolean(selectedAnswer || finishState?.stealerAnswer)}
                 />
-
-                {/* 2 Buttons directly UNDER the input box */}
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSkipSubmit}
-                    className="flex-1 py-3 px-4 bg-stone-100 hover:bg-stone-200 text-slate-700 font-bold rounded-2xl text-sm flex items-center justify-center gap-2 border border-stone-300 transition-all active:scale-95 shadow-sm"
-                  >
-                    <SkipForward className="w-4 h-4 stroke-[1.75]" /> BỎ QUA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmSubmit}
-                    disabled={!answerInput.trim()}
-                    className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 shadow-md shadow-red-600/20 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="w-4 h-4 stroke-[1.75]" /> XÁC NHẬN
-                  </button>
-                </div>
               </div>
             ) : room.activeBuzzer ? (
               <div className="p-4 bg-stone-100 border border-stone-200 rounded-2xl text-center space-y-1">
@@ -248,7 +201,7 @@ export const RoundFinish: React.FC<RoundFinishProps> = ({
                   </div>
                 ) : (
                   <div className="text-xs text-slate-500 italic animate-pulse">
-                    Thí sinh đang nhập đáp án cướp điểm...
+                    Thí sinh đang chọn đáp án cướp điểm...
                   </div>
                 )}
               </div>

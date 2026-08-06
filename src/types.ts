@@ -32,6 +32,7 @@ export interface WarmUpQuestion {
   id: string;
   question: string;
   answer: string;
+  choices?: string[];
   explanation?: string;
   targetPlayerId?: string; // Player 1 or Player 2 or shared
   points: number; // usually 10
@@ -41,6 +42,7 @@ export interface ObstacleClue {
   number: number;
   question: string;
   answer: string;
+  choices?: string[];
   letterCount: number;
   isOpened: boolean;
   isAnswered?: boolean;
@@ -60,6 +62,7 @@ export interface AccelerationQuestion {
   number: number;
   question: string;
   answer: string;
+  choices?: string[];
   imageHint?: string; // Optional SVG/description or AI prompt image
   type: 'image' | 'text' | 'reorder' | 'logic';
 }
@@ -69,6 +72,7 @@ export interface FinishQuestion {
   pointValue: 20 | 30; // 20 or 30 points
   question: string;
   answer: string;
+  choices?: string[];
   explanation?: string;
 }
 

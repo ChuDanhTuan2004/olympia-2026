@@ -104,8 +104,8 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 BÍ QUYẾT DÀNH CHO THÍ SINH
               </div>
               <p className="text-xs text-neutral-300 font-medium">
-                Mỗi ô nhập câu trả lời đều trang bị 2 nút trực quan dưới khung nhập: <strong className="text-white">BỎ QUA</strong> và <strong className="text-white">XÁC NHẬN</strong>.
-                Hệ thống tự động chấm điểm chính xác ngay sau khi bạn bấm Xác Nhận.
+                Mỗi câu hỏi có đúng <strong className="text-white">4 phương án A/B/C/D</strong>. Chạm vào một phương án để gửi và chấm điểm ngay.
+                Riêng phần đoán từ khóa Chướng ngại vật vẫn nhập câu trả lời bằng văn bản.
               </p>
             </div>
           </div>
@@ -126,7 +126,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5 stroke-[1.75]" />
-                  <span>Thí sinh bấm chuông nhanh nhất có quyền nhập đáp án và bấm Xác Nhận hoặc Bỏ Qua.</span>
+                  <span>Thí sinh bấm chuông nhanh nhất có quyền chọn một trong bốn phương án A/B/C/D.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5 stroke-[1.75]" />
@@ -178,7 +178,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5 stroke-[1.75]" />
-                  <span>Tất cả thí sinh đồng thời gõ đáp án và bấm Xác Nhận trước khi hết giờ.</span>
+                  <span>Tất cả thí sinh đồng thời chọn đáp án A/B/C/D trước khi hết giờ.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-white shrink-0 mt-0.5 stroke-[1.75]" />
