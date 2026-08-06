@@ -159,6 +159,7 @@ export type WSMessageType =
   | 'INIT_STATE'
   | 'STATE_UPDATE'
   | 'JOIN_ROOM'
+  | 'REJOIN_ROOM'
   | 'CREATE_ROOM'
   | 'START_GAME'
   | 'GENERATE_QUESTIONS'

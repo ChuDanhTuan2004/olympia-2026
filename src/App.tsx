@@ -12,6 +12,13 @@ import { TopNavControls } from './components/TopNavControls';
 import { RulesModal } from './components/RulesModal';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
+const SESSION_STORAGE_KEY = 'olympia_active_session';
+
+interface StoredSession {
+  roomId: string;
+  role: 'admin' | 'player';
+}
+
 export default function App() {
   const [room, setRoom] = useState<GameState | null>(null);
   const [role, setRole] = useState<Role>('spectator');
@@ -67,15 +74,44 @@ export default function App() {
     socket.onopen = () => {
       setIsConnected(true);
       console.log('WebSocket Connected');
+
+      const storedSessionRaw = localStorage.getItem(SESSION_STORAGE_KEY);
+      const savedPlayerId = localStorage.getItem('olympia_player_id');
+      if (storedSessionRaw) {
+        try {
+          const storedSession = JSON.parse(storedSessionRaw) as StoredSession;
+          if (storedSession.roomId && (storedSession.role === 'admin' || storedSession.role === 'player')) {
+            setRole(storedSession.role);
+            socket.send(
+              JSON.stringify({
+                type: 'REJOIN_ROOM',
+                roomId: storedSession.roomId,
+                role: storedSession.role,
+                playerId: savedPlayerId || undefined,
+              })
+            );
+          }
+        } catch {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+      }
     };
 
     socket.onmessage = (event) => {
       try {
         const msg: WSMessage = JSON.parse(event.data);
         if (msg.type === 'INIT_STATE' || msg.type === 'STATE_UPDATE') {
-          setRoom(msg.payload as GameState);
+          const nextRoom = msg.payload as GameState;
+          if (msg.type === 'INIT_STATE') {
+            const savedPlayerId = localStorage.getItem('olympia_player_id');
+            shownAnswerResultTimestamp.current = nextRoom.players.find(
+              (player) => player.id === savedPlayerId
+            )?.lastAnswerResult?.timestamp;
+          }
+          setRoom(nextRoom);
           setIsGenerating(false);
         } else if (msg.type === 'ROOM_CANCELLED') {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
           setRoom(null);
           setRole('spectator');
           setAnswerResult(null);
@@ -124,6 +160,10 @@ export default function App() {
   const handleJoinRoom = (roomCode: string, userRole: Role, name?: string, avatar?: string) => {
     setRole(userRole);
     const roomId = 'room_' + roomCode;
+    localStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ roomId, role: userRole === 'admin' ? 'admin' : 'player' } satisfies StoredSession)
+    );
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       if (userRole === 'admin') {

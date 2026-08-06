@@ -421,6 +421,27 @@ wss.on('connection', (ws) => {
 
       let room = rooms.get(roomId);
 
+      if (type === 'REJOIN_ROOM') {
+        if (!room) {
+          ws.send(JSON.stringify({ type: 'ROOM_CANCELLED', payload: { reason: 'Phòng không còn tồn tại.' } }));
+          return;
+        }
+
+        if (role === 'player') {
+          const returningPlayer = room.players.find((player) => player.id === playerId);
+          if (!returningPlayer) {
+            ws.send(JSON.stringify({ type: 'ROOM_CANCELLED', payload: { reason: 'Không tìm thấy phiên thí sinh.' } }));
+            return;
+          }
+          returningPlayer.isOnline = true;
+        }
+
+        clientRoomMap.set(ws, { roomId, role: role || 'spectator', playerId });
+        ws.send(JSON.stringify({ type: 'INIT_STATE', payload: room }));
+        broadcastRoomState(roomId);
+        return;
+      }
+
       if (type === 'CREATE_ROOM') {
         room = createRoom(roomId, payload?.code);
         clientRoomMap.set(ws, { roomId, role: 'admin' });
@@ -1024,8 +1045,14 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     const info = clientRoomMap.get(ws);
     if (info) {
+      clientRoomMap.delete(ws);
       const room = rooms.get(info.roomId);
-      if (room && info.playerId) {
+      const hasAnotherConnection = [...clientRoomMap.values()].some(
+        (connection) =>
+          connection.roomId === info.roomId && connection.playerId === info.playerId
+      );
+
+      if (room && info.playerId && !hasAnotherConnection) {
         const player = room.players.find((p) => p.id === info.playerId);
         if (player) {
           player.isOnline = false;
@@ -1033,7 +1060,6 @@ wss.on('connection', (ws) => {
           broadcastRoomState(info.roomId);
         }
       }
-      clientRoomMap.delete(ws);
     }
   });
 });
