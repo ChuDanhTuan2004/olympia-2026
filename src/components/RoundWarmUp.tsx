@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameState, Role } from '../types';
-import { Bell, CheckCircle2, ChevronRight, HelpCircle, Shield, SkipForward, Users } from 'lucide-react';
+import { Ban, Bell, CheckCircle2, ChevronRight, Clock, HelpCircle, Shield, SkipForward, Users } from 'lucide-react';
 import { sounds } from '../lib/audio';
 
 interface RoundWarmUpProps {
@@ -22,13 +22,26 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
   onNextQuestion,
 }) => {
   const warmupQuestions = room.questions?.warmup || [];
-  const currentIdx = room.currentQuestionIndex % (warmupQuestions.length || 1);
+  const currentIdx = room.currentQuestionIndex;
   const q = warmupQuestions[currentIdx];
 
   const [answerInput, setAnswerInput] = React.useState('');
 
   const activeBuzzedPlayer = room.players.find((p) => p.id === room.activeBuzzer?.playerId);
   const isSelfBuzzed = activeBuzzedPlayer?.id === playerId;
+  const warmupState = room.warmupState;
+  const hasLostAnswerRight = Boolean(
+    playerId && warmupState?.attemptedPlayerIds.includes(playerId)
+  );
+  const canPressBuzzer =
+    warmupState?.phase === 'awaiting_buzzer' &&
+    !room.activeBuzzer &&
+    !room.buzzerLocked &&
+    !hasLostAnswerRight;
+
+  React.useEffect(() => {
+    setAnswerInput('');
+  }, [room.currentQuestionIndex]);
 
   const handleBuzzerClick = () => {
     sounds.playBuzzer();
@@ -61,17 +74,47 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {warmupState?.phase === 'revealing' && warmupState.revealedAnswer && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-neutral-200 bg-white p-8 text-center text-black shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-black text-xl font-black text-white">
+              {room.timerSeconds}
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
+              {warmupState.revealReason === 'no_buzzer'
+                ? 'Không có thí sinh bấm chuông'
+                : 'Tất cả thí sinh đã mất quyền trả lời'}
+            </p>
+            <h2 className="mt-3 text-2xl font-black uppercase">Đáp án đúng</h2>
+            <div className="mt-4 rounded-2xl bg-neutral-100 px-5 py-4 text-2xl font-black">
+              {warmupState.revealedAnswer}
+            </div>
+            <p className="mt-4 text-sm text-neutral-500">Tự động chuyển câu tiếp theo sau {room.timerSeconds} giây.</p>
+          </div>
+        </div>
+      )}
+
       {/* Round Header Progress */}
       <div className="bg-white/80 border border-stone-200/80 rounded-3xl p-5 sm:p-6 shadow-xl shadow-stone-200/50 backdrop-blur-md flex items-center justify-between">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-teal-700">VÒNG 1</span>
           <h2 className="text-xl sm:text-2xl font-black text-slate-800">KHỞI ĐỘNG</h2>
         </div>
-        <div className="bg-stone-100/80 border border-stone-200/80 px-4 py-2 rounded-2xl text-center">
-          <span className="text-xs text-slate-500 uppercase block font-medium">Câu hỏi</span>
-          <span className="font-mono font-bold text-teal-800 text-lg">
-            {currentIdx + 1} / {warmupQuestions.length}
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="bg-stone-100/80 border border-stone-200/80 px-4 py-2 rounded-2xl text-center">
+            <span className="text-xs text-slate-500 uppercase block font-medium">Câu hỏi</span>
+            <span className="font-mono font-bold text-teal-800 text-lg">
+              {currentIdx + 1} / {warmupQuestions.length}
+            </span>
+          </div>
+          <div className="bg-black px-4 py-2 rounded-2xl text-center text-white min-w-20">
+            <span className="text-[10px] uppercase block font-medium text-neutral-400">
+              {warmupState?.phase === 'answering' ? 'Trả lời' : 'Chờ chuông'}
+            </span>
+            <span className="font-mono font-black text-lg inline-flex items-center gap-1">
+              <Clock className="h-4 w-4" /> {room.timerSeconds}s
+            </span>
+          </div>
         </div>
       </div>
 
@@ -102,25 +145,37 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
             <span className="text-xs uppercase tracking-wider font-bold text-teal-800 block mb-1">
               🔔 QUYỀN TRẢ LỜI THUỘC VỀ: {activeBuzzedPlayer.name.toUpperCase()}
             </span>
+            <span className="text-sm font-black text-slate-800">Còn {room.timerSeconds} giây để trả lời</span>
           </div>
-        ) : (
+        ) : warmupState?.phase === 'awaiting_buzzer' ? (
           <div className="text-center py-2 text-xs text-slate-500 font-medium">
-            Thí sinh nhanh tay bấm chuông giành quyền trả lời!
+            Thí sinh còn quyền trả lời hãy bấm chuông trong {room.timerSeconds} giây!
           </div>
-        )}
+        ) : null}
 
         {/* Player Buzzer Action & Answer Input */}
         {role === 'player' && (
           <div className="mt-6 space-y-4">
-            {!room.activeBuzzer && (
+            {canPressBuzzer && (
               <div className="flex justify-center">
                 <button
                   onClick={handleBuzzerClick}
-                  disabled={room.buzzerLocked}
                   className="w-full max-w-sm py-5 px-8 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-black text-xl shadow-xl shadow-teal-600/25 transition-all transform active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   <Bell className="w-7 h-7 animate-bounce stroke-[1.75]" /> BẤM CHUÔNG!
                 </button>
+              </div>
+            )}
+
+            {hasLostAnswerRight && warmupState?.phase !== 'revealing' && (
+              <div className="flex items-center justify-center gap-2 rounded-2xl border border-neutral-300 bg-neutral-100 p-4 text-center text-sm font-bold text-neutral-600">
+                <Ban className="h-5 w-5" /> Bạn đã mất quyền trả lời câu hỏi này.
+              </div>
+            )}
+
+            {!isSelfBuzzed && activeBuzzedPlayer && !hasLostAnswerRight && (
+              <div className="rounded-2xl border border-neutral-300 bg-neutral-100 p-4 text-center text-sm font-bold text-neutral-600">
+                {activeBuzzedPlayer.name} đang trả lời. Chuông tạm thời bị khóa.
               </div>
             )}
 
@@ -178,6 +233,7 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {room.players.map((p, idx) => {
                 const isBuzzed = room.activeBuzzer?.playerId === p.id;
+                const isEliminated = warmupState?.attemptedPlayerIds.includes(p.id);
 
                 return (
                   <div
@@ -200,8 +256,12 @@ export const RoundWarmUp: React.FC<RoundWarmUpProps> = ({
                         <span className="text-xs font-bold text-teal-800 bg-white border border-teal-300 px-2.5 py-1 rounded-xl shadow-xs animate-pulse">
                           🔔 Đang trả lời...
                         </span>
+                      ) : isEliminated ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-neutral-500 bg-neutral-100 border border-neutral-300 px-2.5 py-1 rounded-xl">
+                          <Ban className="h-3 w-3" /> Mất quyền
+                        </span>
                       ) : (
-                        <span className="text-xs font-medium text-slate-400">Sẵn sàng</span>
+                        <span className="text-xs font-medium text-slate-500">Còn quyền trả lời</span>
                       )}
                     </div>
                   </div>

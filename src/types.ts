@@ -120,6 +120,10 @@ export interface GameState {
   warmupState?: {
     currentQuestionIndex: number;
     playerAnswers: Record<string, string>; // questionId -> answer
+    attemptedPlayerIds: string[];
+    phase: 'awaiting_buzzer' | 'answering' | 'revealing' | 'completed';
+    revealedAnswer?: string;
+    revealReason?: 'all_failed' | 'no_buzzer';
   };
 
   obstacleState?: {

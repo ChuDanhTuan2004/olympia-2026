@@ -98,6 +98,7 @@ app.use(express.json({ limit: '10mb' }));
 // In-Memory Game Rooms
 const rooms = new Map<string, GameState>();
 const accelerationAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const warmupAdvanceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // Map WebSocket connections to { roomId, role, playerId }
 const clientRoomMap = new Map<WebSocket, { roomId: string; role: string; playerId?: string }>();
 
@@ -467,12 +468,103 @@ function createRoom(roomId: string, customCode?: string): GameState {
   return newRoom;
 }
 
+function resetWarmupQuestion(room: GameState) {
+  room.warmupState = {
+    currentQuestionIndex: room.currentQuestionIndex,
+    playerAnswers: {},
+    attemptedPlayerIds: [],
+    phase: 'awaiting_buzzer',
+  };
+  room.activeBuzzer = undefined;
+  room.buzzerLocked = false;
+  room.timerSeconds = 30;
+  room.timerActive = true;
+}
+
+function allWarmupPlayersAttempted(room: GameState) {
+  const participatingPlayers = room.players.filter((player) => player.isOnline !== false);
+  return (
+    participatingPlayers.length > 0 &&
+    participatingPlayers.every((player) => room.warmupState?.attemptedPlayerIds.includes(player.id))
+  );
+}
+
+function revealWarmupAnswer(room: GameState, reason: 'all_failed' | 'no_buzzer') {
+  const question = room.questions?.warmup[room.currentQuestionIndex];
+  if (!room.warmupState || !question) return;
+
+  room.warmupState.phase = 'revealing';
+  room.warmupState.revealedAnswer = question.answer;
+  room.warmupState.revealReason = reason;
+  room.activeBuzzer = undefined;
+  room.buzzerLocked = true;
+  room.timerSeconds = 5;
+  room.timerActive = true;
+  addRoomLog(
+    room,
+    reason === 'all_failed'
+      ? `Tất cả thí sinh đã mất quyền trả lời. Đáp án đúng: ${question.answer}`
+      : `Không có thí sinh bấm chuông. Đáp án đúng: ${question.answer}`,
+    'info'
+  );
+}
+
+function advanceWarmupQuestion(roomId: string, room: GameState) {
+  const questions = room.questions?.warmup || [];
+  if (room.currentQuestionIndex < questions.length - 1) {
+    room.currentQuestionIndex += 1;
+    resetWarmupQuestion(room);
+    addRoomLog(room, `Chuyển sang câu Khởi động ${room.currentQuestionIndex + 1}.`, 'info');
+  } else {
+    if (room.warmupState) room.warmupState.phase = 'completed';
+    room.activeBuzzer = undefined;
+    room.buzzerLocked = true;
+    room.timerSeconds = 0;
+    room.timerActive = false;
+    addRoomLog(room, 'Đã hoàn thành toàn bộ câu hỏi vòng Khởi động.', 'success');
+  }
+  broadcastRoomState(roomId);
+}
+
 // Global room timer ticker
 setInterval(() => {
   for (const [roomId, room] of rooms.entries()) {
     if (room.timerActive && room.timerSeconds > 0) {
       room.timerSeconds -= 1;
       if (room.timerSeconds <= 0) {
+        if (room.currentRound === 'warmup' && room.warmupState) {
+          if (room.warmupState.phase === 'answering') {
+            const timedOutPlayer = room.players.find(
+              (player) => player.id === room.activeBuzzer?.playerId
+            );
+            if (timedOutPlayer) {
+              if (!room.warmupState.attemptedPlayerIds.includes(timedOutPlayer.id)) {
+                room.warmupState.attemptedPlayerIds.push(timedOutPlayer.id);
+              }
+              recordAnswerResult(timedOutPlayer, false, 0);
+              addRoomLog(room, `${timedOutPlayer.name} hết 20 giây trả lời và mất quyền ở câu này.`, 'warning');
+            }
+            room.activeBuzzer = undefined;
+            room.buzzerLocked = false;
+
+            if (allWarmupPlayersAttempted(room)) {
+              revealWarmupAnswer(room, 'all_failed');
+            } else {
+              room.warmupState.phase = 'awaiting_buzzer';
+              room.timerSeconds = 30;
+              room.timerActive = true;
+            }
+          } else if (room.warmupState.phase === 'revealing') {
+            advanceWarmupQuestion(roomId, room);
+            continue;
+          } else if (room.warmupState.phase === 'awaiting_buzzer') {
+            revealWarmupAnswer(room, 'no_buzzer');
+          }
+
+          broadcastRoomState(roomId);
+          continue;
+        }
+
         room.timerActive = false;
         addRoomLog(room, `Hết giờ vòng thi ${room.currentRound.toUpperCase()}!`, 'warning');
       }
@@ -764,8 +856,7 @@ wss.on('connection', (ws) => {
           room.status = 'playing';
           room.currentRound = 'warmup';
           room.currentQuestionIndex = 0;
-          room.timerSeconds = 60;
-          room.timerActive = true;
+          resetWarmupQuestion(room);
           addRoomLog(room, '🚀 TRẬN THI ĐẤU CHÍNH THỨC BẮT ĐẦU! VÒNG 1: KHỞI ĐỘNG', 'success');
           break;
         }
@@ -774,6 +865,11 @@ wss.on('connection', (ws) => {
           if (role !== 'admin') {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền chuyển vòng thi!' }));
             return;
+          }
+          const pendingWarmupAdvance = warmupAdvanceTimers.get(roomId);
+          if (pendingWarmupAdvance) {
+            clearTimeout(pendingWarmupAdvance);
+            warmupAdvanceTimers.delete(roomId);
           }
           const nextRoundMap: Record<RoundType, RoundType> = {
             warmup: 'obstacle',
@@ -789,7 +885,7 @@ wss.on('connection', (ws) => {
           room.buzzerLocked = false;
 
           if (nextR === 'warmup') {
-            room.timerSeconds = 60;
+            resetWarmupQuestion(room);
           } else if (nextR === 'obstacle') {
             room.timerSeconds = 90;
             room.obstacleState = { openedClues: [], keywordGuessed: false };
@@ -821,6 +917,19 @@ wss.on('connection', (ws) => {
           const player = room.players.find((p) => p.id === playerId);
           if (!player) return;
 
+          if (room.currentRound === 'warmup') {
+            if (
+              !room.warmupState ||
+              room.warmupState.phase !== 'awaiting_buzzer' ||
+              room.warmupState.attemptedPlayerIds.includes(player.id)
+            ) {
+              return;
+            }
+            room.warmupState.phase = 'answering';
+            room.timerSeconds = 20;
+            room.timerActive = true;
+          }
+
           room.buzzerLocked = true;
           room.activeBuzzer = {
             playerId: player.id,
@@ -841,26 +950,64 @@ wss.on('connection', (ws) => {
           const actionType: 'confirm' | 'skip' = payload?.actionType || 'confirm';
 
           if (room.currentRound === 'warmup') {
-            if (room.activeBuzzer?.playerId === player.id) {
+            if (
+              room.activeBuzzer?.playerId === player.id &&
+              room.warmupState?.phase === 'answering'
+            ) {
               const q = room.questions?.warmup[room.currentQuestionIndex];
-              const points = q?.points || 10;
+              const isCorrect =
+                actionType !== 'skip' && q
+                  ? checkAnswerCorrectness(answerText, q.answer)
+                  : false;
 
-              if (actionType === 'skip') {
-                recordAnswerResult(player, false, 0);
-                addRoomLog(room, `⏭️ ${player.name} chọn BỎ QUA câu hỏi. (Đáp án chuẩn: "${q?.answer || ''}")`, 'info');
+              room.warmupState.playerAnswers[player.id] =
+                actionType === 'skip' ? '[Bỏ qua]' : answerText;
+
+              if (isCorrect) {
+                player.score += 10;
+                recordAnswerResult(player, true, 10);
+                room.warmupState.phase = 'completed';
+                room.timerActive = false;
+                addRoomLog(room, `✅ CHÍNH XÁC! ${player.name} trả lời ĐÚNG ("${answerText}")! (+10đ)`, 'success');
+
+                const completedQuestionIndex = room.currentQuestionIndex;
+                if (!warmupAdvanceTimers.has(roomId)) {
+                  const advanceTimer = setTimeout(() => {
+                    warmupAdvanceTimers.delete(roomId);
+                    const activeRoom = rooms.get(roomId);
+                    if (
+                      activeRoom &&
+                      activeRoom.currentRound === 'warmup' &&
+                      activeRoom.currentQuestionIndex === completedQuestionIndex
+                    ) {
+                      advanceWarmupQuestion(roomId, activeRoom);
+                    }
+                  }, 1000);
+                  warmupAdvanceTimers.set(roomId, advanceTimer);
+                }
               } else {
-                const isCorrect = q ? checkAnswerCorrectness(answerText, q.answer) : false;
-                if (isCorrect) {
-                  player.score += points;
-                  recordAnswerResult(player, true, points);
-                  addRoomLog(room, `✅ CHÍNH XÁC! ${player.name} trả lời ĐÚNG ("${answerText}")! (+${points}đ)`, 'success');
+                recordAnswerResult(player, false, 0);
+                if (!room.warmupState.attemptedPlayerIds.includes(player.id)) {
+                  room.warmupState.attemptedPlayerIds.push(player.id);
+                }
+                addRoomLog(
+                  room,
+                  actionType === 'skip'
+                    ? `⏭️ ${player.name} bỏ qua và mất quyền trả lời câu này.`
+                    : `❌ ${player.name} trả lời sai và mất quyền trả lời câu này.`,
+                  'warning'
+                );
+
+                if (allWarmupPlayersAttempted(room)) {
+                  revealWarmupAnswer(room, 'all_failed');
                 } else {
-                  recordAnswerResult(player, false, 0);
-                  addRoomLog(room, `❌ KHÔNG CHÍNH XÁC! ${player.name} trả lời SAI ("${answerText}"). Đáp án chuẩn: "${q?.answer || ''}"`, 'warning');
+                  room.warmupState.phase = 'awaiting_buzzer';
+                  room.timerSeconds = 30;
+                  room.timerActive = true;
                 }
               }
               room.activeBuzzer = undefined;
-              room.buzzerLocked = false;
+              room.buzzerLocked = room.warmupState.phase !== 'awaiting_buzzer';
             }
           } else if (room.currentRound === 'obstacle') {
             if (room.activeBuzzer?.playerId === player.id) {
@@ -1143,6 +1290,16 @@ wss.on('connection', (ws) => {
 
           // Advance question index if specified
           if (payload?.nextQuestion) {
+            if (room.currentRound === 'warmup') {
+              const pendingWarmupAdvance = warmupAdvanceTimers.get(roomId);
+              if (pendingWarmupAdvance) {
+                clearTimeout(pendingWarmupAdvance);
+                warmupAdvanceTimers.delete(roomId);
+              }
+              advanceWarmupQuestion(roomId, room);
+              break;
+            }
+
             const pendingAccelerationAdvance = accelerationAdvanceTimers.get(roomId);
             if (pendingAccelerationAdvance) {
               clearTimeout(pendingAccelerationAdvance);
@@ -1226,6 +1383,11 @@ wss.on('connection', (ws) => {
             clearTimeout(pendingAccelerationAdvance);
             accelerationAdvanceTimers.delete(roomId);
           }
+          const pendingWarmupAdvance = warmupAdvanceTimers.get(roomId);
+          if (pendingWarmupAdvance) {
+            clearTimeout(pendingWarmupAdvance);
+            warmupAdvanceTimers.delete(roomId);
+          }
 
           const cancelledMessage = JSON.stringify({
             type: 'ROOM_CANCELLED',
@@ -1249,6 +1411,11 @@ wss.on('connection', (ws) => {
           if (role !== 'admin') {
             ws.send(JSON.stringify({ type: 'ERROR', payload: 'Chỉ MC Chủ phòng mới có quyền đặt lại trận đấu!' }));
             return;
+          }
+          const pendingWarmupAdvance = warmupAdvanceTimers.get(roomId);
+          if (pendingWarmupAdvance) {
+            clearTimeout(pendingWarmupAdvance);
+            warmupAdvanceTimers.delete(roomId);
           }
           room.status = 'waiting';
           room.currentRound = 'warmup';
