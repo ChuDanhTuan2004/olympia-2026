@@ -134,8 +134,8 @@ export const Lobby: React.FC<LobbyProps> = ({
                       key={av}
                       onClick={() => setSelectedAvatar(av)}
                       className={`w-11 h-11 rounded-2xl text-2xl flex items-center justify-center transition-all ${selectedAvatar === av
-                          ? 'bg-teal-500/20 border-2 border-teal-500 scale-105 shadow-sm'
-                          : 'bg-stone-100 border border-stone-200 hover:bg-stone-200/60'
+                        ? 'bg-teal-500/20 border-2 border-teal-500 scale-105 shadow-sm'
+                        : 'bg-stone-100 border border-stone-200 hover:bg-stone-200/60'
                         }`}
                     >
                       {av}
@@ -235,8 +235,8 @@ export const Lobby: React.FC<LobbyProps> = ({
               <div
                 key={idx}
                 className={`rounded-2xl p-5 border flex items-center gap-4 transition-all ${player
-                    ? 'bg-stone-50/80 border-teal-500/30 shadow-sm'
-                    : 'bg-stone-50/40 border-dashed border-stone-300'
+                  ? 'bg-stone-50/80 border-teal-500/30 shadow-sm'
+                  : 'bg-stone-50/40 border-dashed border-stone-300'
                   }`}
               >
                 {player ? (
@@ -303,20 +303,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bg-stone-100/70 border border-stone-200/80 rounded-2xl p-6 text-center space-y-3">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-teal-500/10 text-teal-700 border border-teal-500/20">
-              <Sparkles className="w-6 h-6 stroke-[1.75]" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-800">Đang chờ MC Chủ phòng kích hoạt bắt đầu</h3>
-            <p className="text-slate-500 text-xs max-w-md mx-auto">
-              Chỉ MC Chủ phòng mới có quyền bấm Bắt đầu trận thi đấu. Trận đấu sẽ tự động chuyển sang Vòng 1 khi MC bấm Bắt đầu.
-            </p>
-            {room.questions && (
-              <div className="inline-flex items-center gap-1.5 text-xs text-teal-700 bg-teal-50 px-3 py-1.5 rounded-full border border-teal-200/60 font-medium">
-                <Layers className="w-4 h-4 stroke-[1.75]" /> Bộ câu hỏi đã sẵn sàng!
-              </div>
-            )}
-          </div>
+          <></>
         )}
       </div>
     </div>

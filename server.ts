@@ -884,8 +884,11 @@ wss.on('connection', (ws) => {
       }
 
       if (!room) {
-        // Auto-create room if not found
-        room = createRoom(roomId);
+        ws.send(JSON.stringify({
+          type: 'ERROR',
+          payload: 'Phòng không tồn tại. Vui lòng kiểm tra lại mã phòng.',
+        }));
+        return;
       }
 
       // Update socket connection map
