@@ -76,16 +76,20 @@ function loadAccountsLocally() {
 
 async function persistAccount(account: AccountRecord) {
   if (accountsPool) {
-    await accountsPool.query(
-      `INSERT INTO olympia_accounts (username, role, password_hash, created_at)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (username) DO UPDATE SET
-         role = EXCLUDED.role,
-         password_hash = EXCLUDED.password_hash,
-         created_at = EXCLUDED.created_at`,
-      [account.username, account.role, account.passwordHash, account.createdAt]
-    );
-    return;
+    try {
+      await accountsPool.query(
+        `INSERT INTO olympia_accounts (username, role, password_hash, created_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (username) DO UPDATE SET
+           role = EXCLUDED.role,
+           password_hash = EXCLUDED.password_hash,
+           created_at = EXCLUDED.created_at`,
+        [account.username, account.role, account.passwordHash, account.createdAt]
+      );
+      return;
+    } catch (err) {
+      console.warn('Lỗi ghi tài khoản vào PostgreSQL, fallback local:', err);
+    }
   }
 
   saveAccountsLocally();
@@ -93,17 +97,41 @@ async function persistAccount(account: AccountRecord) {
 
 async function deletePersistedAccount(username: string) {
   if (accountsPool) {
-    await accountsPool.query('DELETE FROM olympia_accounts WHERE username = $1', [username]);
-    return;
+    try {
+      await accountsPool.query('DELETE FROM olympia_accounts WHERE username = $1', [username]);
+      return;
+    } catch (err) {
+      console.warn('Lỗi xóa tài khoản khỏi PostgreSQL, fallback local:', err);
+    }
   }
 
   saveAccountsLocally();
 }
 
-async function initializeAccountStore() {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
+function fixDatabaseUrl(urlStr: string): string {
+  if (!urlStr) return urlStr;
+  const lastAtIdx = urlStr.lastIndexOf('@');
+  if (lastAtIdx === -1) return urlStr;
+  const prefix = urlStr.slice(0, lastAtIdx);
+  const rest = urlStr.slice(lastAtIdx + 1);
+  const schemeMatch = prefix.match(/^(postgres(?:ql)?:\/\/)(.*)$/);
+  if (!schemeMatch) return urlStr;
+  const scheme = schemeMatch[1];
+  const userpass = schemeMatch[2];
+  const colonIdx = userpass.indexOf(':');
+  if (colonIdx === -1) return urlStr;
+  const rawUser = userpass.slice(0, colonIdx);
+  const rawPass = userpass.slice(colonIdx + 1);
+  const encUser = encodeURIComponent(decodeURIComponent(rawUser));
+  const encPass = encodeURIComponent(decodeURIComponent(rawPass));
+  return `${scheme}${encUser}:${encPass}@${rest}`;
+}
 
-  if (databaseUrl) {
+async function initializeAccountStore() {
+  const rawDatabaseUrl = process.env.DATABASE_URL?.trim();
+
+  if (rawDatabaseUrl) {
+    const databaseUrl = fixDatabaseUrl(rawDatabaseUrl);
     try {
       const usesLocalDatabase = /localhost|127\.0\.0\.1/.test(databaseUrl);
       accountsPool = new Pool({
@@ -135,15 +163,16 @@ async function initializeAccountStore() {
       }
       console.log(`Đã tải ${accounts.size} tài khoản từ PostgreSQL.`);
     } catch (err) {
-      console.error('Lỗi kết nối PostgreSQL (DATABASE_URL):', err);
-      console.warn('Lưu ý: Ký tự đặc biệt trong mật khẩu (như ?, #, @, ...) cần được Encode URL (ví dụ: ? thành %3F, # thành %23).');
-      console.warn('Tạm thời chuyển sang bộ lưu trữ tài khoản local JSON.');
+      console.warn('Không thể kết nối PostgreSQL, tự động chuyển sang lưu trữ local:', err);
+      if (accountsPool) {
+        accountsPool.end().catch(() => {});
+      }
       accountsPool = null;
       loadAccountsLocally();
     }
   } else {
     loadAccountsLocally();
-    console.warn('DATABASE_URL chưa được cấu hình; tài khoản đang dùng file local và sẽ không bền vững khi redeploy.');
+    console.warn('DATABASE_URL chưa được cấu hình; tài khoản đang dùng file local.');
   }
 
   const adminAccount = accounts.get('tuancd');
